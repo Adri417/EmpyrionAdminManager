@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 (2026-11-07) - Direct plus réactif, barre du haut
+- Joueurs actualisés toutes les 5 secondes, factions toutes les 15 secondes et immédiatement quand un joueur change de faction (création, départ, suppression).
+- Les écrans ne sont mis à jour que si quelque chose a vraiment changé (pas de trafic ni de redessin inutile).
+- Page d'un serveur : nom, pastille d'état et boutons (Arrêter, Redémarrer, Forcer l'arrêt...) regroupés dans la barre du haut, plus de double en-tête.
+
 ## 0.3.1 (2026-11-07) - Corrections
 - Le mod EAM ne se chargeait pas : le jeu attend Content\Mods\EAM\EAM.dll (même nom que le dossier). Le DLL s'appelle maintenant EAM.dll ; l'ancien EamMod.dll est retiré automatiquement.
 - « Forcer l'arrêt » ou « Arrêter » n'est plus pris pour un plantage suivi d'un redémarrage automatique quand des processus du jeu mettent du temps à se fermer.

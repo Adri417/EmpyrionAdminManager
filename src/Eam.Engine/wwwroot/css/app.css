@@ -162,3 +162,11 @@ textarea { width: 100%; padding: 9px 11px; background: var(--bg-2); border: 1px 
 #chat-more-wrap { text-align: center; }
 @media (max-width: 760px) { .console-form { flex-wrap: wrap; } .console-form select { width: 100%; } }
 #tab, #live { display: flex; flex-direction: column; gap: 14px; }
+
+/* Server name, state and actions in the top bar */
+.top { flex-wrap: wrap; }
+.top-extra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.top-extra:empty { display: none; }
+.top-actions { margin-top: 0; }
+.top-actions .btn { padding: 6px 12px; }
+.server-top .error { margin-top: 0; }

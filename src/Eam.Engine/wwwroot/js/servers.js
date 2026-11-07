@@ -207,13 +207,15 @@ export async function renderServerDetail(page, id, setTitle) {
     const s = get();
     if (!s) { location.hash = "#/servers"; return; }
     setTitle(s.name);
+    // Name (title), state and actions live in the top bar: one line, no duplicate header.
+    const top = $("#top-extra");
+    if (top) mount(top, html`${stateBadge(s)}<div class="actions-row top-actions" id="actions"></div>`);
+    const notice = s.progress != null || s.autoRestartSuspended || s.lastError;
     mount(page, html`
-      <div class="card server-top">
-        <div class="server-head"><b class="big-name">${s.name}</b>${stateBadge(s)}</div>
+      ${notice ? html`<div class="card server-top">
         ${progressBar(s)}
         ${s.autoRestartSuspended ? html`<div class="error">${t("crash_loop")}</div>` : s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
-        <div class="actions-row" id="actions"></div>
-      </div>
+      </div>` : ""}
       <nav class="tabs">${["overview", "chat", ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
@@ -236,9 +238,11 @@ export async function renderServerDetail(page, id, setTitle) {
     if (["Running", "Starting", "Stopping", "Crashed"].includes(s.state)) b.push(["kill", "act_kill", "danger"]);
     if (s.autoRestartSuspended) b.push(["resume", "act_resume", ""]);
     if (owner && ["Stopped", "Crashed", "NotInstalled"].includes(s.state)) b.push(["rename", "act_rename", ""], ["delete", "act_delete", "danger"]);
-    mount($("#actions", page), html`${b.map(([a, label, cls]) =>
+    const bar = $("#actions");
+    if (!bar) return;
+    mount(bar, html`${b.map(([a, label, cls]) =>
       html`<button class="btn ${cls}" data-act="${a}" ${raw(busy && !["kill", "cancel-stop"].includes(a) ? "disabled" : "")}>${t(label)}</button>`)}`);
-    $$("[data-act]", page).forEach((btn) => btn.addEventListener("click", () => act(btn.dataset.act, s)));
+    $$("[data-act]", bar).forEach((btn) => btn.addEventListener("click", () => act(btn.dataset.act, s)));
   };
 
   const act = async (a, s) => {
