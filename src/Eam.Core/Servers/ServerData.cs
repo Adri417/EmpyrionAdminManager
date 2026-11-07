@@ -6,6 +6,10 @@ namespace Eam.Core.Servers;
 public sealed record ChatEntry(long Id, DateTime Utc, string Channel, int SenderId, string SenderName, string? SenderSteamId,
     int RecipientId, string Text, string Source);
 
+public sealed record ScheduledTask(long Id, string Kind, bool Enabled, string Schedule, string Params, DateTime? LastRunUtc, string? LastResult);
+
+public sealed record PlayerEventEntry(long Id, DateTime Utc, string Kind, string? Detail, string? By);
+
 public sealed record SeenPlayer(string SteamId, int EntityId, string Name, DateTime FirstSeenUtc, DateTime LastSeenUtc, long PlaytimeSeconds);
 
 /// <summary>The separate database of one game server (eam\server.db in the server's folder).</summary>
@@ -35,6 +39,37 @@ public sealed class ServerData
             first_seen_utc TEXT NOT NULL,
             last_seen_utc  TEXT NOT NULL,
             playtime_sec   INTEGER NOT NULL DEFAULT 0
+        );
+        """,
+        // 2: settings, scheduled tasks, player history and offline messages (steps 4 and 5)
+        """
+        CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE tasks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind        TEXT NOT NULL,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            schedule    TEXT NOT NULL,
+            params      TEXT NOT NULL DEFAULT '{}',
+            last_run_utc TEXT NULL,
+            last_result TEXT NULL
+        );
+        CREATE TABLE player_events (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            utc       TEXT NOT NULL,
+            steam_id  TEXT NOT NULL,
+            name      TEXT NOT NULL,
+            kind      TEXT NOT NULL,
+            detail    TEXT NULL,
+            by_user   TEXT NULL
+        );
+        CREATE INDEX player_events_steam ON player_events(steam_id, id);
+        CREATE TABLE offline_messages (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            steam_id      TEXT NOT NULL,
+            text          TEXT NOT NULL,
+            created_utc   TEXT NOT NULL,
+            by_user       TEXT NOT NULL,
+            delivered_utc TEXT NULL
         );
         """,
     ];
@@ -118,6 +153,170 @@ public sealed class ServerData
         while (r.Read())
             list.Add(new SeenPlayer(r.GetString(0), r.GetInt32(1), r.GetString(2), ParseUtc(r.GetString(3)), ParseUtc(r.GetString(4)), r.GetInt64(5)));
         return list;
+    }
+
+    // ------------------------------------------------------------------ settings
+
+    public string? Setting(string key)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT value FROM settings WHERE key=$k;";
+        cmd.Parameters.AddWithValue("$k", key);
+        return cmd.ExecuteScalar() as string;
+    }
+
+    public void SetSetting(string key, string? value)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = value is null ? "DELETE FROM settings WHERE key=$k;" : "INSERT INTO settings(key, value) VALUES($k, $v) ON CONFLICT(key) DO UPDATE SET value=$v;";
+        cmd.Parameters.AddWithValue("$k", key);
+        if (value is not null) cmd.Parameters.AddWithValue("$v", value);
+        cmd.ExecuteNonQuery();
+    }
+
+    // ------------------------------------------------------------------ scheduled tasks
+
+    public IReadOnlyList<ScheduledTask> Tasks()
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT id, kind, enabled, schedule, params, last_run_utc, last_result FROM tasks ORDER BY id;";
+        using var r = cmd.ExecuteReader();
+        var list = new List<ScheduledTask>();
+        while (r.Read())
+            list.Add(new ScheduledTask(r.GetInt64(0), r.GetString(1), r.GetInt32(2) != 0, r.GetString(3), r.GetString(4),
+                r.IsDBNull(5) ? null : ParseUtc(r.GetString(5)), r.IsDBNull(6) ? null : r.GetString(6)));
+        return list;
+    }
+
+    public long SaveTask(ScheduledTask t)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = t.Id == 0
+            ? "INSERT INTO tasks(kind, enabled, schedule, params) VALUES($k, $e, $s, $p) RETURNING id;"
+            : "UPDATE tasks SET kind=$k, enabled=$e, schedule=$s, params=$p WHERE id=$id RETURNING id;";
+        cmd.Parameters.AddWithValue("$k", t.Kind);
+        cmd.Parameters.AddWithValue("$e", t.Enabled ? 1 : 0);
+        cmd.Parameters.AddWithValue("$s", t.Schedule);
+        cmd.Parameters.AddWithValue("$p", t.Params);
+        cmd.Parameters.AddWithValue("$id", t.Id);
+        return Convert.ToInt64(cmd.ExecuteScalar() ?? 0L);
+    }
+
+    public void DeleteTask(long id)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "DELETE FROM tasks WHERE id=$id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void TaskRan(long id, DateTime utc, string result)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "UPDATE tasks SET last_run_utc=$u, last_result=$r WHERE id=$id;";
+        cmd.Parameters.AddWithValue("$u", utc.ToString("O"));
+        cmd.Parameters.AddWithValue("$r", result);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    // ------------------------------------------------------------------ player history and offline messages
+
+    public void PlayerEvent(string steamId, string name, string kind, string? detail = null, string? by = null)
+    {
+        if (string.IsNullOrEmpty(steamId)) return;
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "INSERT INTO player_events(utc, steam_id, name, kind, detail, by_user) VALUES($u, $s, $n, $k, $d, $b);";
+        cmd.Parameters.AddWithValue("$u", DateTime.UtcNow.ToString("O"));
+        cmd.Parameters.AddWithValue("$s", steamId);
+        cmd.Parameters.AddWithValue("$n", name);
+        cmd.Parameters.AddWithValue("$k", kind);
+        cmd.Parameters.AddWithValue("$d", (object?)detail ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$b", (object?)by ?? DBNull.Value);
+        cmd.ExecuteNonQuery();
+    }
+
+    public IReadOnlyList<PlayerEventEntry> PlayerEvents(string steamId, int limit = 200)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT id, utc, kind, detail, by_user FROM player_events WHERE steam_id=$s ORDER BY id DESC LIMIT $l;";
+        cmd.Parameters.AddWithValue("$s", steamId);
+        cmd.Parameters.AddWithValue("$l", Math.Clamp(limit, 1, 1000));
+        using var r = cmd.ExecuteReader();
+        var list = new List<PlayerEventEntry>();
+        while (r.Read()) list.Add(new PlayerEventEntry(r.GetInt64(0), ParseUtc(r.GetString(1)), r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4)));
+        return list;
+    }
+
+    public IReadOnlyList<ChatEntry> PlayerChat(string steamId, int limit = 200)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = """
+            SELECT id, utc, channel, sender_id, sender_name, sender_steam, recipient_id, text, source FROM chat
+            WHERE sender_steam=$s ORDER BY id DESC LIMIT $l;
+            """;
+        cmd.Parameters.AddWithValue("$s", steamId);
+        cmd.Parameters.AddWithValue("$l", Math.Clamp(limit, 1, 1000));
+        using var r = cmd.ExecuteReader();
+        var list = new List<ChatEntry>();
+        while (r.Read())
+            list.Add(new ChatEntry(r.GetInt64(0), ParseUtc(r.GetString(1)), r.GetString(2), r.GetInt32(3), r.GetString(4),
+                r.IsDBNull(5) ? null : r.GetString(5), r.GetInt32(6), r.GetString(7), r.GetString(8)));
+        return list;
+    }
+
+    public void AddOfflineMessage(string steamId, string text, string by)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "INSERT INTO offline_messages(steam_id, text, created_utc, by_user) VALUES($s, $t, $u, $b);";
+        cmd.Parameters.AddWithValue("$s", steamId);
+        cmd.Parameters.AddWithValue("$t", text);
+        cmd.Parameters.AddWithValue("$u", DateTime.UtcNow.ToString("O"));
+        cmd.Parameters.AddWithValue("$b", by);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Messages waiting for this player; marked as delivered.</summary>
+    public IReadOnlyList<string> TakeOfflineMessages(string steamId)
+    {
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        using var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT id, text FROM offline_messages WHERE steam_id=$s AND delivered_utc IS NULL ORDER BY id;";
+        cmd.Parameters.AddWithValue("$s", steamId);
+        var list = new List<(long, string)>();
+        using (var r = cmd.ExecuteReader()) while (r.Read()) list.Add((r.GetInt64(0), r.GetString(1)));
+        foreach (var (id, _) in list)
+        {
+            using var u = c.CreateCommand();
+            u.Transaction = tx;
+            u.CommandText = "UPDATE offline_messages SET delivered_utc=$d WHERE id=$id;";
+            u.Parameters.AddWithValue("$d", DateTime.UtcNow.ToString("O"));
+            u.Parameters.AddWithValue("$id", id);
+            u.ExecuteNonQuery();
+        }
+        tx.Commit();
+        return list.Select(x => x.Item2).ToList();
+    }
+
+    public int PendingOfflineMessages(string steamId)
+    {
+        using var c = _db.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM offline_messages WHERE steam_id=$s AND delivered_utc IS NULL;";
+        cmd.Parameters.AddWithValue("$s", steamId);
+        return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
     private void Prune()
