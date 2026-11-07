@@ -117,7 +117,7 @@ function showShell() {
         <div class="side-foot">v${state.status.version}</div></aside>
       <div class="main">
         <header class="top">
-          <h2 id="title"></h2><div class="spacer"></div>
+          <h2 id="title"></h2><div class="top-extra" id="top-extra"></div><div class="spacer"></div>
           <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">${t("offline")}</span></span>
           <span class="user-chip"><b>${state.me.username}</b> · ${t("role_" + state.me.role)}</span>
           <button class="btn" id="logout">${t("sign_out")}</button>
@@ -138,6 +138,7 @@ window.addEventListener("hashchange", () => { if (state.me) route(); });
 
 function route() {
   setServersListener(null);
+  $("#top-extra").replaceChildren();
   const page = $("#page");
   page.replaceChildren();
   const detail = location.hash.match(/^#\/server\/(\d+)/);

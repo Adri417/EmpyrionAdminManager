@@ -71,6 +71,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
     private readonly ConcurrentDictionary<long, LinkClient> _links = new();
     private readonly ConcurrentDictionary<long, Task> _linkTasks = new();
     private readonly ConcurrentDictionary<long, bool> _dirty = new();
+    private readonly ConcurrentDictionary<long, string> _lastPushed = new();
     private readonly ConcurrentDictionary<string, ServerData> _data = new(StringComparer.OrdinalIgnoreCase);
     private CancellationToken _stopping;
 
@@ -175,8 +176,14 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 try
                 {
                     if (tick % 5 == 0) await WatchAsync(def, tick);
-                    if (_dirty.TryRemove(def.Id, out _))
+                    if (_dirty.TryRemove(def.Id, out _) && hub.ClientCount > 0)
+                    {
+                        // Only push when something really changed: no redraw and no traffic otherwise.
+                        var json = System.Text.Json.JsonSerializer.Serialize(Snapshot(def.Id));
+                        if (_lastPushed.TryGetValue(def.Id, out var last) && last == json) continue;
+                        _lastPushed[def.Id] = json;
                         await hub.BroadcastAsync(new { type = "live", id = def.Id, data = Snapshot(def.Id) }, stop);
+                    }
                 }
                 catch (Exception e) when (e is not OperationCanceledException) { log.LogWarning(e, "Live watch of '{Name}' failed", def.Name); }
             }
@@ -213,7 +220,10 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         {
             try
             {
-                if (tick % 10 == 0) { await link.SendAsync(new { op = "players" }); await link.SendAsync(new { op = "dedi" }); }
+                // Player list + details every 5 s, factions every 15 s: a few small local messages, negligible load.
+                await link.SendAsync(new { op = "players" });
+                if (tick % 10 == 0) await link.SendAsync(new { op = "dedi" });
+                if (tick % 15 == 0) await link.SendAsync(new { op = "factions" });
                 if (tick % 30 == 0)
                 {
                     await link.SendAsync(new { op = "playfields" });
@@ -221,7 +231,6 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     lock (l.Gate) pfs = l.Playfields.Keys.ToArray();
                     foreach (var pf in pfs) await link.SendAsync(new { op = "pfstats", pf });
                 }
-                if (tick % 300 == 0) await link.SendAsync(new { op = "factions" });
             }
             catch (Exception e) { log.LogDebug("Link send failed: {Err}", e.Message); }
         }
@@ -395,6 +404,11 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 break;
             }
 
+            case "faction_changed":
+                await link.SendAsync(new { op = "factions" });
+                await link.SendAsync(new { op = "player", id = Int(m, "id") });
+                break;
+
             case "player_playfield":
                 lock (l.Gate) { if (l.Players.TryGetValue(Int(m, "id"), out var pp)) pp.Playfield = Str(m, "pf"); }
                 break;
@@ -448,8 +462,11 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
             case "factions":
                 if (m.TryGetProperty("list", out var fl) && fl.ValueKind == JsonValueKind.Array)
                     lock (l.Gate)
+                    {
+                        l.Factions.Clear(); // deleted factions disappear too
                         foreach (var f in fl.EnumerateArray())
                             l.Factions[Int(f, "id")] = Str(f, "abbrev") is { Length: > 0 } a ? a : Str(f, "name") ?? "";
+                    }
                 break;
 
             case "chat":
