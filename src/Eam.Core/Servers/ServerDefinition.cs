@@ -21,6 +21,11 @@ public sealed record ServerDefinition
     public bool Installed { get; init; }
     public string? BuildId { get; init; }
     public DateTime CreatedUtc { get; init; }
+    /// <summary>Secret shared with this server's EAM mod only (local link authentication).</summary>
+    public string ModKey { get; init; } = "";
+
+    /// <summary>Local port of the EAM mod: game port + 5 (or + 6 if telnet already uses + 5).</summary>
+    public int ModPort => PortAllocator.ModPortFor(GamePort, TelnetPort);
 
     public string GameDir => Path.Combine(RootDir, "game");
     public string EamDir => Path.Combine(RootDir, "eam");
@@ -30,7 +35,10 @@ public sealed record ServerDefinition
     public string YamlFile => Path.Combine(GameDir, "dedicated-eam.yaml");
     public string ShippedYamlFile => Path.Combine(GameDir, "dedicated.yaml");
     public string LogsDir => Path.Combine(EamDir, "logs");
+    /// <summary>Per-server database (chat, players seen...). Never shared between servers.</summary>
+    public string DatabaseFile => Path.Combine(EamDir, "server.db");
+    public string ModDir => Path.Combine(GameDir, "Content", "Mods", "EAM");
 
-    /// <summary>Every port this server uses (game block + telnet).</summary>
-    public IEnumerable<int> AllPorts => Enumerable.Range(GamePort, PortAllocator.GamePortCount).Append(TelnetPort);
+    /// <summary>Every port this server uses (game block + telnet + EAM mod).</summary>
+    public IEnumerable<int> AllPorts => Enumerable.Range(GamePort, PortAllocator.GamePortCount).Append(TelnetPort).Append(ModPort);
 }

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- EAM game mod: loaded by the Empyrion dedicated server (Unity Mono, .NET Framework 4.x). -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>EamMod</AssemblyName>
+    <RootNamespace>Eam.Mod</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>none</DebugType>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+    <!-- Eleon's modding interface: provided by the game at run time, only referenced to compile. -->
+    <Reference Include="Mif">
+      <HintPath>..\..\lib\empyrion\Mif.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Compile Include="..\Eam.Link\*.cs" LinkBase="Link" />
+    <None Include="EAM_Info.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

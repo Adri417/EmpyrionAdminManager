@@ -55,6 +55,8 @@ builder.Services.AddHttpClient("steam", c => c.Timeout = TimeSpan.FromMinutes(10
 builder.Services.AddSingleton<ServerStore>();
 builder.Services.AddSingleton<ServerManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ServerManager>());
+builder.Services.AddSingleton<LiveService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveService>());
 
 var keys = builder.Services.AddDataProtection()
     .SetApplicationName(AppInfo.ServiceName)
