@@ -13,7 +13,7 @@ namespace Eam.Mod
     /// </summary>
     public sealed class EamMod : ModInterface
     {
-        public const string ModVersion = "0.5.0";
+        public const string ModVersion = "0.9.0";
 
         private ModGameAPI _api;
         private LinkServer _link;
@@ -132,6 +132,55 @@ namespace Eam.Mod
                 }
                 case "bp_finish": Request(CmdId.Request_Blueprint_Finish, new Id(id), rid); break;
                 case "banned": Request(CmdId.Request_GetBannedPlayers, null, rid); break;
+
+                // ---- step 6: structures and playfields
+                case "structures": Request(CmdId.Request_GlobalStructure_List, null, rid); break;
+                case "structures_update": Request(CmdId.Request_GlobalStructure_Update, new PString(r.Str("pf") ?? ""), rid); break;
+                case "touch": Request(CmdId.Request_Structure_Touch, new Id(id), rid); break;
+                case "destroy": Request(CmdId.Request_Entity_Destroy, new Id(id), rid); break;
+                case "block_stats": Request(CmdId.Request_Structure_BlockStatistics, new Id(id), rid); break;
+                case "rename": Request(CmdId.Request_Entity_SetName, new IdPlayfieldName(id, r.Str("pf") ?? "", r.Str("name") ?? ""), rid); break;
+                case "entity_move":
+                {
+                    var pos = new PVector3((float)r.Num("x"), (float)r.Num("y"), (float)r.Num("z"));
+                    var rot = new PVector3((float)r.Num("rx"), (float)r.Num("ry"), (float)r.Num("rz"));
+                    var pf = r.Str("pf");
+                    if (!string.IsNullOrEmpty(pf)) Request(CmdId.Request_Entity_ChangePlayfield, new IdPlayfieldPositionRotation(id, pf, pos, rot), rid);
+                    else Request(CmdId.Request_Entity_Teleport, new IdPositionRotation(id, pos, rot), rid);
+                    break;
+                }
+                case "entity_pos": Request(CmdId.Request_Entity_PosAndRot, new Id(id), rid); break;
+                case "export":
+                    Request(CmdId.Request_Entity_Export, new EntityExportInfo(id, r.Str("file") ?? "", r.Str("unload") == "true") { playfield = r.Str("pf") }, rid);
+                    break;
+                case "new_id": Request(CmdId.Request_NewEntityId, null, rid); break;
+                case "spawn":
+                {
+                    var sp = new EntitySpawnInfo
+                    {
+                        forceEntityId = (int)r.Num("newId"),
+                        playfield = r.Str("pf") ?? "",
+                        pos = new PVector3((float)r.Num("x"), (float)r.Num("y"), (float)r.Num("z")),
+                        rot = new PVector3((float)r.Num("rx"), (float)r.Num("ry"), (float)r.Num("rz")),
+                        name = r.Str("name") ?? "",
+                        type = (byte)r.Num("type", 3),
+                        entityTypeName = "",
+                        prefabName = r.Str("prefab") ?? "",
+                        prefabDir = r.Str("prefabDir") ?? "",
+                        factionGroup = (byte)r.Num("factionGroup"),
+                        factionId = (int)r.Num("factionId"),
+                        exportedEntityDat = r.Str("dat"),
+                    };
+                    Request(CmdId.Request_Entity_Spawn, sp, rid);
+                    break;
+                }
+                case "pf_entities": Request(CmdId.Request_Playfield_Entity_List, new PString(r.Str("pf") ?? ""), rid); break;
+                case "pf_load": Request(CmdId.Request_Load_Playfield, new PlayfieldLoad((float)r.Num("secs", 60), r.Str("pf") ?? "", 0), rid); break;
+
+                // ---- step 7: faction messages
+                case "msg_faction":
+                    Request(CmdId.Request_InGameMessage_Faction, new IdMsgPrio(id, Text(r), (byte)r.Num("prio", 1), (float)r.Num("secs", 10)), rid);
+                    break;
                 default:
                     _link.Send(Ev("error", "op", op, "code", "unknown_op", "rid", rid));
                     break;
@@ -247,6 +296,43 @@ namespace Eam.Mod
                     return Ev("banned", "list", bl);
                 }
                 case CmdId.Event_Ok: return Ev("ok");
+                case CmdId.Event_GlobalStructure_List when data is GlobalStructureList gsl:
+                {
+                    var all = new List<object>();
+                    if (gsl.globalStructures != null)
+                        foreach (var kv in gsl.globalStructures)
+                            if (kv.Value != null)
+                                foreach (var g in kv.Value)
+                                    all.Add(Ev("s", "id", g.id, "type", (int)g.type, "name", g.name, "pf", kv.Key, "fg", (int)g.factionGroup, "fid", g.factionId,
+                                        "x", g.pos.x, "y", g.pos.y, "z", g.pos.z, "rx", g.rot.x, "ry", g.rot.y, "rz", g.rot.z,
+                                        "powered", g.powered, "fuel", g.fuel, "devices", g.cntDevices, "blocks", g.cntBlocks, "triangles", g.cntTriangles,
+                                        "lights", g.cntLights, "class", g.classNr, "core", (int)g.coreType, "pilot", g.pilotId,
+                                        "visited", g.lastVisitedUTC, "docked", g.dockedShips ?? new List<int>(),
+                                        "ss", g.SolarSystemName, "ssx", g.SolarSystemCoord.x, "ssy", g.SolarSystemCoord.y, "ssz", g.SolarSystemCoord.z));
+                    return Ev("structures", "list", all);
+                }
+                case CmdId.Event_Structure_BlockStatistics when data is IdStructureBlockInfo bs:
+                {
+                    var stats = new List<object>();
+                    if (bs.blockStatistics != null) foreach (var kv in bs.blockStatistics) stats.Add(Ev("b", "id", kv.Key, "count", kv.Value));
+                    return Ev("block_stats", "id", bs.id, "list", stats);
+                }
+                case CmdId.Event_Entity_PosAndRot when data is IdPositionRotation epr:
+                    return Ev("entity_pos", "id", epr.id, "x", epr.pos.x, "y", epr.pos.y, "z", epr.pos.z, "rx", epr.rot.x, "ry", epr.rot.y, "rz", epr.rot.z);
+                case CmdId.Event_NewEntityId when data is Id nid: return Ev("new_id", "id", nid.id);
+                case CmdId.Event_Playfield_Entity_List when data is PlayfieldEntityList pel:
+                {
+                    var ents = new List<object>();
+                    if (pel.entities != null) foreach (var e in pel.entities) ents.Add(Ev("e", "id", e.id, "type", e.type, "x", e.pos.x, "y", e.pos.y, "z", e.pos.z));
+                    return Ev("pf_entities", "pf", pel.playfield, "list", ents);
+                }
+                case CmdId.Event_Statistics when data is StatisticsParam st:
+                    return Ev("stat", "kind", st.type.ToString(), "i1", st.int1, "i2", st.int2, "i3", st.int3, "i4", st.int4);
+                case CmdId.Event_ConsoleCommand when data is ConsoleCommandInfo cc:
+                    return Ev("console_cmd", "cmd", cc.command, "allowed", cc.allowed, "player", cc.playerEntityId);
+                case CmdId.Event_Player_DisconnectedWaiting when data is Id dw: return Ev("player_waiting_lost", "id", dw.id);
+                case CmdId.Event_TraderNPCItemSold when data is TraderNPCItemSoldInfo ts:
+                    return Ev("trader_sold", "player", ts.playerEntityId, "item", ts.boughtItemId, "count", ts.boughtItemCount, "price", ts.boughtItemPrice);
                 case CmdId.Event_Playfield_List when data is PlayfieldList pl: return Ev("playfield_list", "list", pl.playfields ?? new List<string>());
                 case CmdId.Event_Playfield_Stats when data is PlayfieldStats s:
                     return Ev("playfield_stats", "pf", s.playfield, "fps", s.fps, "fpsmin", s.fpsmin, "mem", s.mem, "players", s.players,

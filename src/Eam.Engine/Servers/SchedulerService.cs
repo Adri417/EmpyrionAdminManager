@@ -61,6 +61,20 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
         return n == DateTime.MaxValue ? null : n;
     }
 
+    /// <summary>Next time (local) a task of this kind runs, for the chatbot (CB:NextRestart, CB:NextWipe).</summary>
+    public DateTime? NextRun(long id, string kind)
+    {
+        var def = manager.Definition(id);
+        DateTime? best = null;
+        foreach (var t in live.Data(def).Tasks().Where(t => t.Enabled && t.Kind == kind))
+        {
+            DateTime? n;
+            try { n = Next(t); } catch { continue; }
+            if (n is { } v && (best is null || v < best)) best = v;
+        }
+        return best;
+    }
+
     public long Save(long id, long taskId, TaskRequest req, string by)
     {
         var def = manager.Definition(id);

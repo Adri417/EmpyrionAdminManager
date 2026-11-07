@@ -62,6 +62,13 @@ builder.Services.AddSingleton<GameConfigService>();
 builder.Services.AddSingleton<PlayerService>();
 builder.Services.AddSingleton<SchedulerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SchedulerService>());
+builder.Services.AddSingleton<WorldService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<WorldService>());
+builder.Services.AddHttpClient("web", c => c.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddSingleton<Alerts>();
+builder.Services.AddSingleton<CommunityService>();
+builder.Services.AddSingleton<DiscordService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DiscordService>());
 
 var keys = builder.Services.AddDataProtection()
     .SetApplicationName(AppInfo.ServiceName)
@@ -121,7 +128,11 @@ UserEndpoints.Map(app);
 SystemEndpoints.Map(app);
 ServerEndpoints.Map(app);
 ServerToolsEndpoints.Map(app);
+WorldEndpoints.Map(app);
+FeatureEndpoints.Map(app);
+CommunityEndpoints.Map(app);
 app.Services.GetRequiredService<PlayerService>(); // subscribes to player joins (offline messages)
+app.Services.GetRequiredService<CommunityService>(); // chatbot, filter, messages (listens to the chat)
 app.Map("/ws", (HttpContext ctx, LiveHub hub) => hub.Accept(ctx)).RequireAuthorization(Roles.Viewer);
 app.MapFallback(ctx =>
 {
