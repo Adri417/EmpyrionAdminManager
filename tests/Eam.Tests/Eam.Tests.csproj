@@ -14,5 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Eam.Core\Eam.Core.csproj" />
     <ProjectReference Include="..\..\src\Eam.Engine\Eam.Engine.csproj" />
+    <ProjectReference Include="..\Eam.StressTool\Eam.StressTool.csproj" />
   </ItemGroup>
 </Project>
