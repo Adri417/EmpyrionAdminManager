@@ -103,14 +103,20 @@ public static partial class ScenarioLibrary
             if (Directory.Exists(target))
             {
                 old = Path.Combine(dir, $".eam-old-{Guid.NewGuid():N}");
-                Directory.Move(target, old);
+                SafeFs.MoveDirectory(target, old);
             }
-            Directory.Move(tmp, target);
-            if (old is not null) try { Directory.Delete(old, true); } catch { }
+            try { SafeFs.MoveDirectory(tmp, target); }
+            catch
+            {
+                // Put the previous version back so the server keeps a working scenario.
+                if (old is not null && !Directory.Exists(target)) try { SafeFs.MoveDirectory(old, target); } catch { }
+                throw;
+            }
+            if (old is not null) try { SafeFs.DeleteDirectory(old); } catch { }
         }
         finally
         {
-            if (Directory.Exists(tmp)) try { Directory.Delete(tmp, true); } catch { }
+            if (Directory.Exists(tmp)) try { SafeFs.DeleteDirectory(tmp); } catch { }
         }
         progress?.Report(100);
     }

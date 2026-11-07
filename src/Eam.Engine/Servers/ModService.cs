@@ -110,12 +110,12 @@ public sealed class ModService(ServerManager manager)
                     name = SafeName(Path.GetFileNameWithoutExtension(file.FileName));
                     var wrapped = Path.Combine(staging, "w", name);
                     Directory.CreateDirectory(Path.GetDirectoryName(wrapped)!);
-                    Directory.Move(extract, wrapped);
+                    Eam.Core.SafeFs.MoveDirectory(extract, wrapped);
                     extract = Path.GetDirectoryName(wrapped)!;
                 }
                 var src = Path.Combine(extract, name);
                 var dir = Path.Combine(staging, name);
-                Directory.Move(src, dir);
+                Eam.Core.SafeFs.MoveDirectory(src, dir);
             }
             else throw new ServerException("invalid_file");
 
@@ -124,7 +124,7 @@ public sealed class ModService(ServerManager manager)
             if (Directory.Exists(dest)) MoveAside(def, dest, "replaced");
             var disabled = Path.Combine(DisabledDir(def), name);
             if (Directory.Exists(disabled)) MoveAside(def, disabled, "replaced");
-            Directory.Move(Path.Combine(staging, name), dest);
+            Eam.Core.SafeFs.MoveDirectory(Path.Combine(staging, name), dest);
             ServerManager.ServerLog(def, $"{by}: mod {name} installed from {file.FileName}");
             return name;
         }
@@ -138,7 +138,7 @@ public sealed class ModService(ServerManager manager)
     {
         var target = Path.Combine(def.EamDir, "mods-removed", $"{DateTime.Now:yyyyMMdd-HHmmss}-{why}", Path.GetFileName(dir));
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        Directory.Move(dir, target);
+        Eam.Core.SafeFs.MoveDirectory(dir, target);
     }
 
     public void SetEnabled(long id, string name, bool enabled, string by)
@@ -151,7 +151,7 @@ public sealed class ModService(ServerManager manager)
         if (!Directory.Exists(from)) throw new ServerException("not_found");
         if (Directory.Exists(to)) throw new ServerException("name_taken");
         Directory.CreateDirectory(Path.GetDirectoryName(to)!);
-        Directory.Move(from, to);
+        Eam.Core.SafeFs.MoveDirectory(from, to);
         ServerManager.ServerLog(def, $"{by}: mod {name} {(enabled ? "enabled" : "disabled")}");
     }
 

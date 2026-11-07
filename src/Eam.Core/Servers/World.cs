@@ -138,7 +138,7 @@ public static class SharedCleanup
         {
             var src = Path.Combine(sharedDir, f.Name);
             if (!Directory.Exists(src)) continue;
-            Directory.Move(src, Path.Combine(target, f.Name));
+            SafeFs.MoveDirectory(src, Path.Combine(target, f.Name));
             count++;
             bytes += f.Size;
         }
