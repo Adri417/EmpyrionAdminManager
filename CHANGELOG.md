@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.6 (2026-11-07) - Correctif Windows
+- Installation de scénario (Reforged Eden depuis le Workshop) : corrige l'erreur « accès refusé » quand Windows (antivirus, indexation, OneDrive) bloque un instant le dossier qui vient d'être copié. EAM réessaie, puis déplace fichier par fichier. Même protection pour les sauvegardes, les mods, les structures et le renommage d'un serveur.
+- Si le remplacement d'un scénario échoue, l'ancienne version est remise en place.
+
 ## 0.9.5 (2026-11-07) - Import EAH, historique des sacs à dos, mise à jour automatique
 - Import en un clic d'un serveur qui utilisait EAH : EAM lit seul ses bases chiffrées et ses réglages. Joueurs, notes et marqués, chat (90 jours), historiques (actions, kicks, bans, positions, intrusions), copies des sacs à dos, structures et leur historique, statistiques, réglages (MOTD, filtre, chatbot, Discord, limites, wipes), tâches planifiées (importées désactivées), modèles d'inventaire. Le serveur peut être copié dans EAM, utilisé tel quel, ou ses données ajoutées à un serveur EAM existant.
 - Historique des sacs à dos : copie régulière du sac des joueurs connectés et à chaque mort, voir une copie, la rendre ou donner les objets en plus, inventaires à la mort de tous les joueurs, copies gardées, modèles d'inventaire.

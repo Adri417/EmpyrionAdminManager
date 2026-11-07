@@ -26,3 +26,20 @@ public class UpdateTests
         Assert.Contains("Get-Process -Id 1234", s);
     }
 }
+
+public class SafeFsTests
+{
+    [Fact]
+    public void MovesAFolderWithSubfolders()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "eam-safefs-" + Guid.NewGuid().ToString("N"));
+        var src = Path.Combine(root, "a"); var dst = Path.Combine(root, "b");
+        Directory.CreateDirectory(Path.Combine(src, "x", "y"));
+        File.WriteAllText(Path.Combine(src, "x", "y", "f.txt"), "hello");
+        Eam.Core.SafeFs.MoveDirectory(src, dst);
+        Assert.False(Directory.Exists(src));
+        Assert.Equal("hello", File.ReadAllText(Path.Combine(dst, "x", "y", "f.txt")));
+        Eam.Core.SafeFs.DeleteDirectory(root);
+        Assert.False(Directory.Exists(root));
+    }
+}

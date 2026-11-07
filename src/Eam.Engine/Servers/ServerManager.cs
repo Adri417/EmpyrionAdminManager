@@ -300,7 +300,7 @@ public sealed class ServerManager : BackgroundService
                 EnsureFolderFree(newRoot, all);
                 if (IsUnder(def.RootDir, _paths.ServersDir))
                 {
-                    Directory.Move(def.RootDir, newRoot);
+                    Eam.Core.SafeFs.MoveDirectory(def.RootDir, newRoot);
                     updated = updated with { Slug = slug, RootDir = newRoot };
                 }
             }

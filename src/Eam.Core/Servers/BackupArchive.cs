@@ -179,7 +179,7 @@ public static class BackupArchive
                     var dest = Path.Combine(saves, "Games", gameName);
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                     MoveAside(dest, aside);
-                    Directory.Move(g, dest);
+                    SafeFs.MoveDirectory(g, dest);
                 }
             }
             var bps = Path.Combine(work, "Saves", "Blueprints");
@@ -187,7 +187,7 @@ public static class BackupArchive
             {
                 var dest = Path.Combine(saves, "Blueprints");
                 MoveAside(dest, aside);
-                Directory.Move(bps, dest);
+                SafeFs.MoveDirectory(bps, dest);
             }
             var admin = Path.Combine(work, "Saves", "adminconfig.yaml");
             if (File.Exists(admin)) File.Copy(admin, Path.Combine(saves, "adminconfig.yaml"), overwrite: true);
@@ -212,7 +212,7 @@ public static class BackupArchive
                 try
                 {
                     if (Directory.Exists(original)) Directory.Delete(original, true);
-                    Directory.Move(moved, original);
+                    SafeFs.MoveDirectory(moved, original);
                 }
                 catch { }
             }
@@ -287,7 +287,7 @@ public static class BackupArchive
         if (Directory.Exists(targetDir))
         {
             Directory.CreateDirectory(asideDir);
-            Directory.Move(targetDir, Path.Combine(asideDir, Path.GetFileName(targetDir)));
+            SafeFs.MoveDirectory(targetDir, Path.Combine(asideDir, Path.GetFileName(targetDir)));
         }
         var root = Path.GetFullPath(targetDir) + Path.DirectorySeparatorChar;
         foreach (var e in entries)
@@ -304,7 +304,7 @@ public static class BackupArchive
     {
         if (!Directory.Exists(path)) return;
         var moved = $"{path}.eam-old-{DateTime.UtcNow:yyyyMMddHHmmss}";
-        Directory.Move(path, moved);
+        SafeFs.MoveDirectory(path, moved);
         aside.Add((path, moved));
     }
 
