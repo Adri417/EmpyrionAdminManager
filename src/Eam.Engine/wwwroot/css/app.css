@@ -43,12 +43,13 @@ a { color: var(--accent); }
 
 /* Forms */
 label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
-input[type=text], input[type=password], input[type=number], select {
+input[type=text], input[type=password], input[type=number], input[type=search], input:not([type]), textarea, select {
   width: 100%; padding: 9px 11px; background: var(--bg-2); border: 1px solid var(--line);
   border-radius: 8px; outline: none; }
-input:focus, select:focus { border-color: var(--accent); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); font-size: 13px; }
 .check input { width: auto; }
+.opt .check input, td input[type=checkbox] { width: auto; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px;
   border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
 .btn:hover { border-color: var(--accent); }
@@ -170,3 +171,36 @@ textarea { width: 100%; padding: 9px 11px; background: var(--bg-2); border: 1px 
 .top-actions { margin-top: 0; }
 .top-actions .btn { padding: 6px 12px; }
 .server-top .error { margin-top: 0; }
+
+/* Steps 4 and 5: players, backups, scheduler, options */
+.btn.small { padding: 4px 10px; font-size: 12px; }
+input.small { width: 90px !important; }
+.row-actions { white-space: nowrap; text-align: right; }
+.row-actions .btn { margin-left: 4px; }
+.check.inline { display: inline-flex; margin: 0 10px 0 0; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: var(--panel-2); }
+tr.muted { opacity: .55; }
+.actions-row.wrap .btn { flex: 0 0 auto; }
+.form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+.days { display: flex; flex-wrap: wrap; gap: 4px; }
+select.picker { height: auto; min-height: 160px; }
+.history { max-height: 320px; overflow-y: auto; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.opt-filter { margin-bottom: 8px; }
+.opts { max-height: 60vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.opt { display: grid; grid-template-columns: minmax(180px, 280px) minmax(120px, 1fr); gap: 4px 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); align-items: center; }
+.opt:last-child { border-bottom: 0; }
+.opt .hint { grid-column: 1 / -1; font-size: 12px; }
+.opt.off .opt-val { opacity: .5; }
+.opt.off b { color: var(--muted); font-weight: 500; }
+.ws-list { display: grid; gap: 8px; margin-bottom: 10px; }
+.ws-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+details.card summary { cursor: pointer; }
+textarea.console { width: 100%; min-height: 50vh; font-family: Consolas, monospace; font-size: 12px; color: var(--text); resize: vertical; }
+h4 { margin: 12px 0 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
+@media (max-width: 700px) {
+  .opt { grid-template-columns: 1fr; }
+  .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .row-actions { white-space: normal; }
+}
+.history .chat-time { margin-right: 8px; }

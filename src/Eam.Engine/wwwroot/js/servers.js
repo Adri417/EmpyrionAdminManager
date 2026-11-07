@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { t, extend, errorText } from "./i18n.js";
 import { html, raw, mount, $, $$, toast } from "./dom.js";
 import { liveEvent, fetchLive, renderLive, renderChat, playerCount, live } from "./live.js";
+import { toolsEvent, toolTabs, renderTool } from "./tools.js";
 
 extend({
   fr: {
@@ -88,6 +89,7 @@ export function initServers(me) { store.me = me; }
 
 /** Called by the live socket. */
 export function serverEvent(msg) {
+  if (toolsEvent(msg)) return;
   if (liveEvent(msg, (id) => store.servers.find((s) => s.id === id)?.name ?? "")) {
     if (msg.type === "live") store.onChange?.();
     return;
@@ -216,7 +218,7 @@ export async function renderServerDetail(page, id, setTitle) {
         ${progressBar(s)}
         ${s.autoRestartSuspended ? html`<div class="error">${t("crash_loop")}</div>` : s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
       </div>` : ""}
-      <nav class="tabs">${["overview", "chat", ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
+      <nav class="tabs">${["overview", "chat", ...toolTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
     applyBars(page);
@@ -274,6 +276,11 @@ export async function renderServerDetail(page, id, setTitle) {
     } else if (tab === "chat") {
       if (el.dataset.tab === "chat") return;
       renderChat(el, s, store.me);
+    } else if (["players", "backups", "schedule", "options"].includes(tab)) {
+      if (el.dataset.tab === tab) return; // these screens refresh themselves
+      el.dataset.tab = tab;
+      renderTool(tab, el, s, store.me);
+      return;
     } else if (tab === "console") {
       if (el.dataset.tab === "console") return; // keep the console content between live updates
       mount(el, html`<div class="card"><div class="hint">${t("console_hint")}</div>

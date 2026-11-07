@@ -248,5 +248,12 @@ namespace Eam.Link
 
         public static double Num(this Dictionary<string, object> d, string k, double fallback = 0) =>
             d != null && d.TryGetValue(k, out var v) && v is double x ? x : fallback;
+
+        /// <summary>Number if present, otherwise null (for optional fields).</summary>
+        public static double? OptNum(this Dictionary<string, object> d, string k) =>
+            d != null && d.TryGetValue(k, out var v) && v is double x ? x : (double?)null;
+
+        public static List<object> List(this Dictionary<string, object> d, string k) =>
+            d != null && d.TryGetValue(k, out var v) ? v as List<object> : null;
     }
 }
