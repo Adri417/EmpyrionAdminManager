@@ -6,6 +6,8 @@ using Eam.Core.Monitoring;
 using Eam.Core.Security;
 using Eam.Engine.Api;
 using Eam.Engine.Infrastructure;
+using Eam.Engine.Servers;
+using Eam.Core.Servers;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -49,6 +51,10 @@ builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<SystemMonitor>();
 builder.Services.AddSingleton<LiveHub>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveHub>());
+builder.Services.AddHttpClient("steam", c => c.Timeout = TimeSpan.FromMinutes(10));
+builder.Services.AddSingleton<ServerStore>();
+builder.Services.AddSingleton<ServerManager>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ServerManager>());
 
 var keys = builder.Services.AddDataProtection()
     .SetApplicationName(AppInfo.ServiceName)
@@ -106,6 +112,7 @@ app.UseMiddleware<CsrfMiddleware>();
 AuthEndpoints.Map(app);
 UserEndpoints.Map(app);
 SystemEndpoints.Map(app);
+ServerEndpoints.Map(app);
 app.Map("/ws", (HttpContext ctx, LiveHub hub) => hub.Accept(ctx)).RequireAuthorization(Roles.Viewer);
 app.MapFallback(ctx =>
 {
