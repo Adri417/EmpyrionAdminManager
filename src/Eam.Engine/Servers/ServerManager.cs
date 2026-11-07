@@ -374,6 +374,7 @@ public sealed class ServerManager : BackgroundService
     {
         delayMinutes = Math.Clamp(delayMinutes, 0, 60);
         rt.WantRunning = false;
+        rt.ManualStopUtc = DateTime.UtcNow;
         if (FindGameProcesses(def).Count == 0) { rt.State = ServerState.Stopped; return; }
 
         rt.State = ServerState.Stopping;
@@ -443,6 +444,7 @@ public sealed class ServerManager : BackgroundService
         var def = Get(id);
         var rt = Runtime(id);
         rt.WantRunning = false;
+        rt.ManualStopUtc = DateTime.UtcNow;
         rt.StopCountdown?.Cancel();
         var procs = FindGameProcesses(def);
         KillAll(procs);
@@ -543,7 +545,16 @@ public sealed class ServerManager : BackgroundService
         if (procs.Count > 0)
         {
             rt.ProcessId = main?.Id;
-            if (rt.State is ServerState.Stopped or ServerState.Crashed) { rt.State = ServerState.Starting; rt.WantRunning = true; rt.StartRequestedUtc ??= DateTime.UtcNow; }
+            if (rt.State is ServerState.Stopped or ServerState.Crashed)
+            {
+                // Processes still closing right after an admin stop: finish the job, never treat it as a start.
+                if (rt.ManualStopUtc is { } ms && DateTime.UtcNow - ms < TimeSpan.FromMinutes(2))
+                {
+                    KillAll(procs);
+                    return;
+                }
+                rt.State = ServerState.Starting; rt.WantRunning = true; rt.StartRequestedUtc ??= DateTime.UtcNow;
+            }
             if (rt.State == ServerState.Starting && await TelnetClient.IsReachableAsync(def.TelnetPort, ct))
             {
                 rt.State = ServerState.Running;
@@ -678,7 +689,7 @@ public sealed class ServerManager : BackgroundService
     {
         if (def.ModKey.Length < 32) def = _store.Update(def with { ModKey = NewModKey() });
         var source = Path.Combine(AppContext.BaseDirectory, "mod", "EAM");
-        if (!File.Exists(Path.Combine(source, "EamMod.dll")))
+        if (!File.Exists(Path.Combine(source, "EAM.dll")))
         {
             ServerLog(def, "EAM mod files not found next to EAM: live view disabled for this start");
             return def;
@@ -686,6 +697,10 @@ public sealed class ServerManager : BackgroundService
         try
         {
             Directory.CreateDirectory(def.ModDir);
+            // Remove files of older EAM versions (e.g. EamMod.dll in 0.3.0): only EAM's files live in this folder.
+            var shipped = Directory.GetFiles(source).Select(Path.GetFileName).Append("eam-link.cfg").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var old in Directory.GetFiles(def.ModDir))
+                if (!shipped.Contains(Path.GetFileName(old))) File.Delete(old);
             foreach (var file in Directory.GetFiles(source))
             {
                 var target = Path.Combine(def.ModDir, Path.GetFileName(file));

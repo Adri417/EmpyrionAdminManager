@@ -13,7 +13,7 @@ namespace Eam.Mod
     /// </summary>
     public sealed class EamMod : ModInterface
     {
-        public const string ModVersion = "0.3.0";
+        public const string ModVersion = "0.3.1";
 
         private ModGameAPI _api;
         private LinkServer _link;
