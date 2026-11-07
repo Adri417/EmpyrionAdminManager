@@ -34,7 +34,7 @@ public static class WorldEndpoints
             var file = form.Files.FirstOrDefault();
             if (file is null) return Results.BadRequest(new { error = "invalid_file" });
             return await Api.RunAsync(async () => { await w.SaveBlueprintAsync(id, file, By(c)); return Api.Ok; });
-        }).RequireAuthorization(Roles.Admin).DisableAntiforgery();
+        }).RequireAuthorization(Roles.Admin).DisableAntiforgery().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(60 * 1024 * 1024));
         g.MapPost("/blueprints/delete", (long id, NameRequest req, WorldService w) => Api.Run(() => { w.DeleteBlueprint(id, req.Name); return Api.Ok; }))
             .RequireAuthorization(Roles.Admin);
 

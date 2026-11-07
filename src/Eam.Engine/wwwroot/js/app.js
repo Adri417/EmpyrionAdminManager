@@ -329,6 +329,17 @@ async function renderSettings(page) {
     </div>
     <label>${t("cert_path")}</label><input name="certificatePath" type="text" value="${s.certificatePath}">
     <div class="hint">${t("remote_warn")}</div>
+    <h3 class="section">Let's Encrypt</h3>
+    <label class="check"><input name="leEnabled" type="checkbox" ${raw(s.letsEncrypt?.enabled ? "checked" : "")}> ${t("le_enable")}</label>
+    <div class="form-row">
+      <div><label>${t("le_domain")}</label><input name="leDomain" type="text" value="${s.letsEncrypt?.domain ?? ""}" placeholder="eam.example.com"></div>
+      <div><label>${t("le_email")}</label><input name="leEmail" type="text" inputmode="email" value="${s.letsEncrypt?.email ?? ""}"></div>
+    </div>
+    <label>${t("le_port")}</label><input name="lePort" type="number" min="1" max="65535" value="${s.letsEncrypt?.httpPort ?? 80}">
+    <label class="check"><input name="leTerms" type="checkbox" ${raw(s.letsEncrypt?.acceptTerms ? "checked" : "")}> ${t("le_terms")}</label>
+    <div class="hint">${t("le_hint")}</div>
+    ${s.letsEncryptStatus?.expiresUtc ? html`<div class="hint">${t("le_valid", new Date(s.letsEncryptStatus.expiresUtc).toLocaleDateString())}</div>` : ""}
+    ${s.letsEncryptStatus?.error ? html`<div class="error">${t("le_error", s.letsEncryptStatus.error)}</div>` : ""}
     <button class="btn primary block" type="submit">${t("save")}</button></form>`);
   $("#sf").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -338,6 +349,7 @@ async function renderSettings(page) {
         localPort: +f.localPort.value, remoteEnabled: f.remoteEnabled.checked, remotePort: +f.remotePort.value,
         certificatePath: f.certificatePath.value, certificatePassword: f.certificatePassword.value,
         language: f.language.value, sessionDays: +f.sessionDays.value,
+        letsEncrypt: { enabled: f.leEnabled.checked, domain: f.leDomain.value.trim(), email: f.leEmail.value.trim(), httpPort: +f.lePort.value, acceptTerms: f.leTerms.checked },
       });
       setLanguage(f.language.value);
       toast(r.restartRequired ? t("restart_needed") : t("saved"));

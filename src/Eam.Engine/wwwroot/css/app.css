@@ -231,3 +231,9 @@ svg.chart .serie { stroke-width: 1.6; }
 .tabs { flex-wrap: wrap; }
 .chat-line .tr { padding: 0 4px; font-size: 11px; opacity: 0; margin-left: 4px; }
 .chat-line:hover .tr, .chat-line .tr:focus { opacity: 1; }
+
+/* step 9 */
+.badge.ok { background: rgba(60, 180, 110, .18); color: #4cc38a; }
+.card.inner { margin: 8px 0; padding: 10px 12px; box-shadow: none; }
+textarea.mono, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 13px; width: 100%; }
+label.btn.disabled { opacity: .5; pointer-events: none; }

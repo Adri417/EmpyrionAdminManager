@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.0 (2026-11-07) - Étapes 6 à 9 : monde, communauté, sécurité, outils
+- Structures : liste complète (filtres par type, playfield, propriétaire, alimentation), fiche détaillée (blocs, appareils, objets), renommer, changer de propriétaire, déplacer (vers un playfield, une position ou un joueur), exporter, cloner, détruire (exportée d'abord), restaurer depuis la bibliothèque d'EAM, historique de chaque structure.
+- Plans (.epb) : import, liste, apparition dans le jeu. Nettoyage du dossier Shared (dossiers de structures disparues mis de côté, jamais effacés).
+- Limites par joueur ou faction (nombre, classe, blocs, par playfield), avertissement puis suppression après délai ; wipes automatiques (structures non visitées, playfields de départ) ; playfields réservés à certains joueurs ou factions.
+- Playfields : liste, chargement, wipe ; carte 2D/3D des structures et joueurs ; carte de la galaxie.
+- Chatbot des joueurs (préfixe au choix) : aide, infos, heure, prochain redémarrage et wipe, message privé, soin quotidien, kit de survie, ramener/aller à son vaisseau, détruire, redémarrage par les admins en jeu, commandes personnalisées.
+- Alertes (mots surveillés, événements graves) avec son et notification, traduction des messages du chat, filtre d'insultes (avertissements puis bannissements progressifs), joueurs muets, message du jour, bienvenue, message à l'entrée d'un playfield.
+- Pont Discord : chat global dans les deux sens, salons de faction, salon des admins pour les alertes.
+- Sécurité : anti-triche (objets interdits, piles trop grandes, vie et nourriture, crédits qui sautent, bannissement automatique possible), journal des attaques de bases, historique « que s'est-il passé ici » (positions des joueurs et structures sur 14 jours), suivi d'un joueur, contrôle des pôles, téléportation d'urgence à la déconnexion, protection contre le flood telnet.
+- Statistiques sur 7 jours : joueurs, FPS, mémoire, playfields, morts, cœurs posés et retirés, avec conseils.
+- Let's Encrypt : certificat HTTPS gratuit, renouvelé tout seul.
+- Gestionnaire de mods : installation (.zip ou .dll), activer, désactiver, supprimer (gardé de côté), édition des fichiers de réglages avec copie de l'ancien.
+- Autominer : mineurs virtuels achetés avec des crédits, carburant, stock limité, 13 minerais par défaut.
+- Événements : inscriptions des joueurs, départ avec kit et téléportation, inventaire mis de côté et rendu, retour à la position d'origine (même s'ils étaient déconnectés).
+- Maintenance : compactage des bases, nouveau départ pour une nouvelle saison (sauvegarde avant), fichiers joueurs abîmés, convertisseur de numéros d'objets.
+- Mod EAM 0.9.0 : structures, export/import, apparition, déplacements, statistiques du jeu.
+
 ## 0.5.0 (2026-11-07) - Étapes 4 et 5 : sauvegardes, planificateur, options, scénarios, joueurs
 - Sauvegardes de chaque serveur : partie (Saves\Games\<nom>), plans des joueurs, adminconfig.yaml, options et données EAM. Création à chaud, téléchargement, suppression, restauration (serveur arrêté, avec sauvegarde de sécurité avant), conservation des N dernières automatiques, copie dans un dossier Google Drive / OneDrive.
 - Planificateur : redémarrage (avec avertissements et sauvegarde avant), arrêt, démarrage, sauvegarde, message, commande console, wipe de playfields, nettoyage des journaux, mise à jour du jeu. Heures fixes par jour de la semaine ou intervalle ; « Lancer maintenant ».
