@@ -235,7 +235,7 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
                 return "ok " + b.Name;
             case "message":
                 if (!running) return "skipped_not_running";
-                await live.SendAsync(def.Id, p.Text ?? "", p.Mode ?? "chat", null, who);
+                await live.SendAsync(def.Id, p.Text ?? "", p.Mode ?? "chat", null, who, asServer: true);
                 return "ok";
             case "command":
                 if (!running) return "skipped_not_running";

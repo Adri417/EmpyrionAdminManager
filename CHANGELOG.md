@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.7 (2026-11-07) - Messages de connexion, nom de l'admin, bases plus solides
+- Chat : option pour annoncer « X a rejoint le serveur » et « X a quitté le serveur » (textes modifiables, pseudo Steam). Pas d'annonce pour les joueurs déjà là quand EAM redémarre.
+- Chat : les messages écrits dans EAM s'affichent en jeu avec le nom de l'admin (« Adrien: bonjour »). Option dans Communauté.
+- Vue d'ensemble : un clic sur un joueur en ligne ouvre sa fiche.
+- Expulsion : se fait par Steam ID et passe par le mod EAM (repli par telnet). La réponse du jeu est notée dans le journal du serveur, avec un nouvel essai si le joueur est encore là après 10 secondes.
+- Bases de données : sous forte charge, les écritures d'EAM sur une même base passent chacune leur tour (plus d'erreur « database is locked » ni d'écriture perdue sous Windows) ; réglage SQLite recommandé (WAL + synchronous NORMAL), jamais de corruption même en cas de coupure.
+- Tests anti-corruption : deux serveurs écrits en même temps par 18 tâches, et programme tué en pleine écriture, vérifiés à chaque envoi sous Windows.
+
 ## 0.9.6 (2026-11-07) - Correctif Windows
 - Installation de scénario (Reforged Eden depuis le Workshop) : corrige l'erreur « accès refusé » quand Windows (antivirus, indexation, OneDrive) bloque un instant le dossier qui vient d'être copié. EAM réessaie, puis déplace fichier par fichier. Même protection pour les sauvegardes, les mods, les structures et le renommage d'un serveur.
 - Si le remplacement d'un scénario échoue, l'ancienne version est remise en place.

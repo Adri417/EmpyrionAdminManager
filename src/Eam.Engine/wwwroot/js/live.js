@@ -71,6 +71,17 @@ function since(utc) {
 }
 
 export function renderLive(el, s) {
+  // Clicking an online player opens their sheet in the Players tab (moderators and above).
+  if (!el.dataset.openPlayer) {
+    el.dataset.openPlayer = "1";
+    el.addEventListener("click", (e) => {
+      const row = e.target.closest("tr[data-open-player]");
+      const tab = document.querySelector(".tabs button[data-tab=players]");
+      if (!row || !row.dataset.openPlayer || !tab) return;
+      window.__eamOpenPlayer = row.dataset.openPlayer;
+      tab.click();
+    });
+  }
   const l = live.snapshots[s.id];
   if (!["Running", "Starting", "Stopping"].includes(s.state) || !l) {
     mount(el, html`<div class="card"><div class="hint">${t("live_offline")}</div></div>`);
@@ -89,7 +100,7 @@ export function renderLive(el, s) {
     <div class="card"><h3>${t("live_players")}</h3>
       ${l.players.length === 0 ? html`<div class="hint">${t("live_nobody")}</div>` : html`<div class="table-wrap"><table>
         <thead><tr><th>${t("col_name")}</th><th>${t("col_faction")}</th><th>${t("col_playfield")}</th><th>${t("col_level")}</th><th>${t("col_ping")}</th><th>${t("col_online")}</th></tr></thead>
-        <tbody>${l.players.map((p) => html`<tr><td><b>${p.name}</b><div class="hint">${p.steamId || ""}</div></td><td>${p.faction || "—"}</td>
+        <tbody>${l.players.map((p) => html`<tr class="${p.steamId && document.querySelector(".tabs button[data-tab=players]") ? "clickable row-online" : "row-online"}" data-open-player="${p.steamId || ""}"><td><b>${p.name}</b><div class="hint">${p.steamId || ""}</div></td><td>${p.faction || "—"}</td>
           <td>${p.playfield || "—"}</td><td>${p.level}</td><td>${p.ping} ms</td><td>${since(p.onlineSinceUtc)}</td></tr>`)}</tbody></table></div>`}
     </div>
     <div class="card"><h3>${t("live_playfields")}</h3>

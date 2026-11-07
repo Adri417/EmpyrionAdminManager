@@ -117,6 +117,10 @@ export async function renderCommunity(tab, el, s, me) {
     { title: t("cm_messages"), open: false, fields: [
       { k: "motd", type: "textarea", label: t("cm_motd") },
       { k: "welcome", type: "textarea", label: t("cm_welcome") },
+      { k: "joinLeaveMessages", type: "check", label: t("cm_joinleave_on") },
+      { k: "joinMessage", type: "text", label: t("cm_join_msg"), hint: t("cm_joinleave_hint") },
+      { k: "leaveMessage", type: "text", label: t("cm_leave_msg") },
+      { k: "showAdminName", type: "check", label: t("cm_admin_name"), hint: t("cm_admin_name_hint") },
       { k: "playfieldMessages", type: "rows", label: t("cm_pf_msgs"), cols: [{ k: "playfield", label: t("col_playfield"), type: "text" }, { k: "text", label: t("p_text"), type: "text" }] },
       { k: "translateTo", type: "text", label: t("cm_translate") }] },
     { title: t("cm_discord"), hint: t("cm_discord_hint"), open: false, fields: [

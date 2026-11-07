@@ -258,7 +258,7 @@ public sealed class GameplayService
         {
             case "open":
                 data.SaveGameEvent(ev with { State = "open" });
-                try { await _live.SendAsync(def.Id, $"Événement / event « {ev.Name} » : EV:join {ev.Id}", "chat", null, "EAM"); }
+                try { await _live.SendAsync(def.Id, $"Événement / event « {ev.Name} » : EV:join {ev.Id}", "chat", null, "EAM", asServer: true); }
                 catch (ServerException) { } // server stopped: players will see it with EV:list
                 break;
             case "start":

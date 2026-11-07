@@ -41,9 +41,11 @@ public sealed class Database
         {
             c.Open();
             using var cmd = c.CreateCommand();
-            // WAL + full sync on commit: survives a crash or power cut without corruption.
+            // WAL + synchronous NORMAL: the database can never be corrupted by a crash or a power cut
+            // (SQLite's recommended setting for WAL). Only the very last writes before a power cut may be
+            // missing; FULL would sync the disk at every write, which is 30 times slower on Windows.
             // busy_timeout: another program (a database viewer, a backup) holding the file for a moment.
-            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=30000;";
+            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=30000;";
             cmd.ExecuteNonQuery();
             return c;
         }

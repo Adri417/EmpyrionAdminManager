@@ -149,7 +149,8 @@ public sealed class PlayerService
             {
                 Need("moderator");
                 var reason = Clean(r.Reason ?? "Kicked by an admin", 120).Replace("'", "’");
-                await _manager.ConsoleAsync(id, $"kick {Entity()} '{reason}'", by);
+                _ = Entity();
+                await KickAsync(id, online!, reason, by);
                 detail = reason;
                 break;
             }
@@ -465,13 +466,43 @@ public sealed class PlayerService
     }
 
     /// <summary>Kicks every online player (before a maintenance).</summary>
+    /// <summary>
+    /// Kicks by Steam ID (works whatever playfield the player is on). Sent through the EAM mod when it is
+    /// connected, otherwise through telnet; the game's answer is written in the server log, and a warning
+    /// is added if the player is still online a few seconds later.
+    /// </summary>
+    private async Task KickAsync(long id, LivePlayer p, string reason, string by)
+    {
+        var def = _manager.Definition(id);
+        var target = p.SteamId is { Length: > 0 } steam ? steam : p.Id.ToString();
+        var cmd = $"kick {target} '{reason}'";
+        string answer;
+        try { await _live.SendToModAsync(id, new { op = "console", cmd }); answer = "(sent through the EAM mod)"; }
+        catch (ServerException) { answer = await _manager.ConsoleAsync(id, cmd, by); }
+        ServerManager.ServerLog(def, $"Kick {p.Name} ({target}) by {by}: {(string.IsNullOrWhiteSpace(answer) ? "no answer" : answer.Trim())}");
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10));
+            if (_live.Online(id, p.Id) is not null)
+            {
+                // Second try through telnet with the entity number, in case this game version wants it.
+                try
+                {
+                    var again = await _manager.ConsoleAsync(id, $"kick {p.Id} '{reason}'", by);
+                    ServerManager.ServerLog(def, $"Kick {p.Name}: still online after 10 s, tried again with the entity id: {again.Trim()}");
+                }
+                catch (Exception e) { ServerManager.ServerLog(def, $"Kick {p.Name}: still online after 10 s ({e.Message})"); }
+            }
+        });
+    }
+
     public async Task<int> KickAllAsync(long id, string reason, string by)
     {
         var n = 0;
         reason = Clean(string.IsNullOrWhiteSpace(reason) ? "Server maintenance" : reason, 120).Replace("'", "’");
         foreach (var p in _live.OnlinePlayers(id))
         {
-            try { await _manager.ConsoleAsync(id, $"kick {p.Id} '{reason}'", by); n++; } catch (ServerException) { }
+            try { await KickAsync(id, p, reason, by); n++; } catch (ServerException) { }
         }
         ServerManager.ServerLog(_manager.Definition(id), $"{by}: kicked all players ({n})");
         return n;

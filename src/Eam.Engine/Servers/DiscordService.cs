@@ -159,7 +159,7 @@ public sealed class DiscordService : BackgroundService
             if (factionId is { } fid)
                 await _live.SendToModAsync(def.Id, new { op = "msg_faction", id = fid, text = $"[Discord] {name}: {text}", prio = 1, secs = 15 });
             else
-                await _live.SendAsync(def.Id, $"[Discord] {name}: {text}", "chat", null, "Discord");
+                await _live.SendAsync(def.Id, $"[Discord] {name}: {text}", "chat", null, "Discord", asServer: true);
         }
     }
 }

@@ -31,6 +31,8 @@ public sealed partial class CommunityService
         _log = log;
         _live.ChatReceived += OnChatAsync;
         _live.PlayerJoined += OnJoinAsync;
+        _live.PlayerArrived += (def, p) => AnnounceAsync(def, p, joined: true);
+        _live.PlayerLeft += (def, p) => AnnounceAsync(def, p, joined: false);
         _live.ModEvent += OnModEventAsync;
     }
 
@@ -408,6 +410,22 @@ public sealed partial class CommunityService
     }
 
     // ------------------------------------------------------------------ joins, playfields, console commands
+
+    /// <summary>"Adri417 joined the server" / "Adri417 left the server" in the global chat (option).</summary>
+    private async Task AnnounceAsync(ServerDefinition def, LivePlayer p, bool joined)
+    {
+        try
+        {
+            var s = Settings(def);
+            if (!s.JoinLeaveMessages) return;
+            var template = joined ? s.JoinMessage : s.LeaveMessage;
+            if (string.IsNullOrWhiteSpace(template)) return;
+            var text = template.Replace("{name}", p.Name, StringComparison.OrdinalIgnoreCase);
+            text = Fill(text, p);
+            await _live.SendAsync(def.Id, text, "chat", null, "EAM", asServer: true);
+        }
+        catch (Exception e) { _log.LogDebug("Join/leave message for {Name} failed: {Error}", p.Name, e.Message); }
+    }
 
     private async Task OnJoinAsync(ServerDefinition def, LivePlayer p)
     {

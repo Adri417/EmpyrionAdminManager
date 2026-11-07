@@ -45,6 +45,8 @@ public sealed class LivePlayfield
 public sealed class ServerLive
 {
     public readonly object Gate = new();
+    /// <summary>Players who really just logged in (not players already there when EAM or the mod restarted).</summary>
+    public readonly HashSet<int> JustConnected = [];
     public bool Connected;
     public string? ModVersion;
     public string? LinkError;
@@ -112,6 +114,9 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
 
     /// <summary>Called when a player joins: messages left while they were offline.</summary>
     public event Func<ServerDefinition, LivePlayer, Task>? PlayerJoined;
+    public event Func<ServerDefinition, LivePlayer, Task>? PlayerLeft;
+    /// <summary>A player who really just logged in (PlayerJoined also fires for players found online after a restart).</summary>
+    public event Func<ServerDefinition, LivePlayer, Task>? PlayerArrived;
 
     /// <summary>Every message from the mod (steps 6 to 9 listen to it). Handlers run in the background.</summary>
     public event Func<ServerDefinition, string, JsonElement, Task>? ModEvent;
@@ -215,7 +220,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
     /// mode "chat": message in the global chat; "popup": message box on the players' screen
     /// (all players, or one player when <paramref name="playerId"/> is set).
     /// </summary>
-    public async Task<ChatEntry?> SendAsync(long id, string text, string mode, int? playerId, string by)
+    public async Task<ChatEntry?> SendAsync(long id, string text, string mode, int? playerId, string by, bool asServer = false)
     {
         var def = store.Find(id) ?? throw new ServerException("not_found");
         text = (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
@@ -234,7 +239,10 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
             return null;
         }
 
-        var safe = text.Replace("'", "’");
+        // "Adrien: hello" in game, so players know which admin is talking (option of the Community tab).
+        var inGame = !asServer && FeatureStore.Load<CommunitySettings>(Data(def), "community").ShowAdminName ? $"{by}: {text}" : text;
+        var safe = inGame.Replace("'", "’");
+        var stored = text.Replace("'", "’");
         var l = Live(id);
         lock (l.Gate)
         {
@@ -243,7 +251,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         }
         if (link is not null) await link.SendAsync(new { op = "console", cmd = $"say '{safe}'" });
         else await manager.ConsoleAsync(id, $"say '{safe}'", by);
-        var entry = Data(def).AddChat(DateTime.UtcNow, "Global", -1, by, null, -1, safe, "eam");
+        var entry = Data(def).AddChat(DateTime.UtcNow, "Global", -1, by, null, -1, stored, "eam");
         await hub.BroadcastAsync(new { type = "chat", id, msg = entry }, CancellationToken.None);
         return entry;
     }
@@ -436,6 +444,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 break;
 
             case "player_connected":
+                lock (l.Gate) { l.JustConnected.Add(Int(m, "id")); }
                 await link.SendAsync(new { op = "player", id = Int(m, "id") });
                 break;
 
@@ -449,7 +458,11 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     Data(def).PlayerSeen(steam, gone.Id, gone.Name, (long)(DateTime.UtcNow - gone.PlaytimeCountedUtc).TotalSeconds);
                     Data(def).PlayerEvent(steam, gone.Name, "leave", gone.Playfield);
                 }
-                if (gone is not null) await hub.BroadcastAsync(new { type = "player_left", id = def.Id, name = gone.Name }, CancellationToken.None);
+                if (gone is not null)
+                {
+                    await hub.BroadcastAsync(new { type = "player_left", id = def.Id, name = gone.Name }, CancellationToken.None);
+                    if (PlayerLeft is { } left) _ = Task.Run(() => left(def, gone));
+                }
                 break;
             }
 
@@ -468,12 +481,13 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
             case "player_info":
             {
                 var id = Int(m, "id");
-                bool isNew;
+                bool isNew, arrived;
                 LivePlayer p;
                 long addSeconds;
                 lock (l.Gate)
                 {
                     isNew = !l.Players.TryGetValue(id, out var existing);
+                    arrived = l.JustConnected.Remove(id);
                     p = existing ?? new LivePlayer { Id = id };
                     p.SteamId = Str(m, "steamId");
                     p.Name = Str(m, "name") ?? p.Name;
@@ -499,6 +513,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     if (p.SteamId is { Length: > 0 } s2) Data(def).PlayerEvent(s2, p.Name, "join", p.Playfield);
                     await hub.BroadcastAsync(new { type = "player_joined", id = def.Id, name = p.Name }, CancellationToken.None);
                     if (PlayerJoined is { } handler) _ = Task.Run(() => handler(def, p));
+                    if (arrived && PlayerArrived is { } arrive) _ = Task.Run(() => arrive(def, p));
                 }
                 break;
             }

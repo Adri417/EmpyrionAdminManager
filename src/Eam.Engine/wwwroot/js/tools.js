@@ -204,6 +204,12 @@ async function items(id) {
 const itemLabel = (list, id) => list.find((i) => i.id === id)?.label ?? `#${id}`;
 
 async function renderPlayers(el, s, me) {
+  if (window.__eamOpenPlayer) {
+    // Opened from the overview: go straight to this player's sheet.
+    const steam = window.__eamOpenPlayer;
+    window.__eamOpenPlayer = null;
+    return renderPlayer(el, s, me, steam, () => renderPlayers(el, s, me));
+  }
   let filter = "";
   let list = [];
   const draw = () => {

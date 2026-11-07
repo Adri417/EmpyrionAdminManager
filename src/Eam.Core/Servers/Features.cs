@@ -223,6 +223,12 @@ public sealed class CommunitySettings : IFeatureSettings
 
     public string Motd { get; set; } = "";
     public string Welcome { get; set; } = "";
+    /// <summary>"X joined the server" / "X left the server" in the global chat.</summary>
+    public bool JoinLeaveMessages { get; set; }
+    public string JoinMessage { get; set; } = "{name} joined the server";
+    public string LeaveMessage { get; set; } = "{name} left the server";
+    /// <summary>Messages written from EAM show the EAM user's name in game ("Adrien: hello").</summary>
+    public bool ShowAdminName { get; set; } = true;
     public List<PlayfieldMessage> PlayfieldMessages { get; set; } = [];
 
     public string TranslateTo { get; set; } = "fr";
@@ -241,6 +247,7 @@ public sealed class CommunitySettings : IFeatureSettings
         FeatureStore.Need(Commands.All(c => Regex.IsMatch(c.Command, @"^[A-Za-z0-9_\-?!]{1,24}$") && c.Response.Length is > 0 and <= 500), "invalid_command");
         FeatureStore.Need(SurvivalKit.All(k => k.Id > 0 && k.Count is > 0 and <= 100000) && SurvivalCredits is >= 0 and <= 100_000_000, "invalid_kit");
         FeatureStore.Need(FilterWarnings is >= 0 and <= 20 && FilterFirstBanMinutes is >= 1 and <= 60 * 24 * 30 && MutedKickAfter is >= 0 and <= 100, "invalid_filter");
+        FeatureStore.Need(JoinMessage.Length <= 200 && LeaveMessage.Length <= 200, "invalid_message");
         FeatureStore.Need(Motd.Length <= 500 && Welcome.Length <= 500 && PlayfieldMessages.All(p => p.Playfield.Length > 0 && p.Text.Length is > 0 and <= 300), "invalid_message");
         FeatureStore.Need(Regex.IsMatch(TranslateTo, "^[a-z]{2}(-[A-Za-z]{2})?$"), "invalid_language");
         bool Snowflake(string s) => s.Length == 0 || Regex.IsMatch(s, "^[0-9]{15,22}$");
