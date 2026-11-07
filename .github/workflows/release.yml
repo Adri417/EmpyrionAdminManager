@@ -1,0 +1,36 @@
+name: Release
+
+# Pushing a tag vX.Y.Z builds Empyrion Admin Manager for Windows and publishes the zip as a GitHub release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Tests
+        run: dotnet test tests/Eam.Tests -c Release
+      - name: Build the release zip
+        shell: pwsh
+        run: ./tools/publish.ps1
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $zip = Get-ChildItem dist\EmpyrionAdminManager-*.zip | Select-Object -First 1
+          $notes = "Download $($zip.Name), unzip it and run EmpyrionAdminManager.exe. See CHANGELOG.md for what changed.`n`nTelechargez $($zip.Name), decompressez-le et lancez EmpyrionAdminManager.exe. Voir CHANGELOG.md pour les nouveautes."
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) { gh release upload $tag $zip.FullName --clobber }
+          else { gh release create $tag $zip.FullName --title "Empyrion Admin Manager $($tag.TrimStart('v'))" --notes $notes }
