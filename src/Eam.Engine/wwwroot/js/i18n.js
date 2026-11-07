@@ -100,6 +100,11 @@ const dict = {
 
 let lang = "fr";
 
+/** Adds texts from another module (keeps each screen's texts next to its code). */
+export function extend(texts) {
+  for (const l of Object.keys(texts)) Object.assign(dict[l] ??= {}, texts[l]);
+}
+
 export function setLanguage(pref) {
   if (pref === "fr" || pref === "en") lang = pref;
   else lang = (navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en";
