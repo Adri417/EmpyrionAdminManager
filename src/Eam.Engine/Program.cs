@@ -57,6 +57,11 @@ builder.Services.AddSingleton<ServerManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ServerManager>());
 builder.Services.AddSingleton<LiveService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveService>());
+builder.Services.AddSingleton<BackupService>();
+builder.Services.AddSingleton<GameConfigService>();
+builder.Services.AddSingleton<PlayerService>();
+builder.Services.AddSingleton<SchedulerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SchedulerService>());
 
 var keys = builder.Services.AddDataProtection()
     .SetApplicationName(AppInfo.ServiceName)
@@ -115,6 +120,8 @@ AuthEndpoints.Map(app);
 UserEndpoints.Map(app);
 SystemEndpoints.Map(app);
 ServerEndpoints.Map(app);
+ServerToolsEndpoints.Map(app);
+app.Services.GetRequiredService<PlayerService>(); // subscribes to player joins (offline messages)
 app.Map("/ws", (HttpContext ctx, LiveHub hub) => hub.Accept(ctx)).RequireAuthorization(Roles.Viewer);
 app.MapFallback(ctx =>
 {

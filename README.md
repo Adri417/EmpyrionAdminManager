@@ -38,10 +38,10 @@ and later `servers\<name>\` (one fully separate folder per game server) and `ste
 ## Roadmap
 
 1. Foundations (done)
-2. SteamCMD, server install/update, multi-server isolation, start/stop, console
-3. Game mod + live players/chat
-4. Scheduler and backups
-5. Players
+2. SteamCMD, server install/update, multi-server isolation, start/stop, console (done)
+3. Game mod + live players/chat (done)
+4. Scheduler and backups, every server and game option, scenarios from the Steam Workshop (done)
+5. Players: details, inventory, credits, experience, items, teleport, kick/ban, roles, offline messages, history (done)
 6. Structures and playfields
 7. Chat bot, Discord
 8. Anti-cheat, logs, statistics

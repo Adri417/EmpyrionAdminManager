@@ -13,12 +13,17 @@ namespace Eam.Mod
     /// </summary>
     public sealed class EamMod : ModInterface
     {
-        public const string ModVersion = "0.3.2";
+        public const string ModVersion = "0.5.0";
 
         private ModGameAPI _api;
         private LinkServer _link;
         private ushort _seq = 1;
         private bool _hasChatEx;
+
+        // Requests sent by the engine with a "rid": the game answers with the same sequence number,
+        // so the answer can be tagged with the engine's request id.
+        private sealed class Pending { public string Rid; public bool Full; }
+        private readonly Dictionary<ushort, Pending> _pending = new Dictionary<ushort, Pending>();
 
         public void Game_Start(ModGameAPI dediAPI)
         {
@@ -52,7 +57,7 @@ namespace Eam.Mod
             foreach (var r in requests)
             {
                 try { Execute(r); }
-                catch (Exception e) { link.Send(Ev("error", "op", r.Str("op"), "code", "exception", "detail", e.Message)); }
+                catch (Exception e) { link.Send(Ev("error", "op", r.Str("op"), "code", "exception", "detail", e.Message, "rid", r.Str("rid"))); }
             }
         }
 
@@ -67,28 +72,102 @@ namespace Eam.Mod
         private void Execute(Dictionary<string, object> r)
         {
             var op = r.Str("op");
+            var rid = r.Str("rid");
+            var id = (int)r.Num("id");
             switch (op)
             {
-                case "ping": _link.Send(Ev("pong", "t", r.Num("t"))); break;
-                case "players": Request(CmdId.Request_Player_List, null); break;
-                case "player": Request(CmdId.Request_Player_Info, new Id((int)r.Num("id"))); break;
-                case "playfields": Request(CmdId.Request_Playfield_List, null); break;
-                case "pfstats": Request(CmdId.Request_Playfield_Stats, new PString(r.Str("pf") ?? "")); break;
-                case "dedi": Request(CmdId.Request_Dedi_Stats, null); break;
-                case "factions": Request(CmdId.Request_Get_Factions, new Id(1)); break;
+                case "ping": _link.Send(Ev("pong", "t", r.Num("t"), "rid", rid)); break;
+                case "players": Request(CmdId.Request_Player_List, null, rid); break;
+                case "player": Request(CmdId.Request_Player_Info, new Id(id), rid, string.Equals(r.Str("full"), "true", StringComparison.OrdinalIgnoreCase)); break;
+                case "playfields": Request(CmdId.Request_Playfield_List, null, rid); break;
+                case "pfstats": Request(CmdId.Request_Playfield_Stats, new PString(r.Str("pf") ?? ""), rid); break;
+                case "dedi": Request(CmdId.Request_Dedi_Stats, null, rid); break;
+                case "factions": Request(CmdId.Request_Get_Factions, new Id(1), rid); break;
                 case "msg_all":
-                    Request(CmdId.Request_InGameMessage_AllPlayers, new IdMsgPrio(0, Text(r), (byte)r.Num("prio", 1), (float)r.Num("secs", 10)));
+                    Request(CmdId.Request_InGameMessage_AllPlayers, new IdMsgPrio(0, Text(r), (byte)r.Num("prio", 1), (float)r.Num("secs", 10)), rid);
                     break;
                 case "msg_player":
-                    Request(CmdId.Request_InGameMessage_SinglePlayer, new IdMsgPrio((int)r.Num("id"), Text(r), (byte)r.Num("prio", 1), (float)r.Num("secs", 10)));
+                    Request(CmdId.Request_InGameMessage_SinglePlayer, new IdMsgPrio(id, Text(r), (byte)r.Num("prio", 1), (float)r.Num("secs", 10)), rid);
                     break;
                 case "console":
-                    Request(CmdId.Request_ConsoleCommand, new PString(r.Str("cmd") ?? ""));
+                    Request(CmdId.Request_ConsoleCommand, new PString(r.Str("cmd") ?? ""), rid);
                     break;
+
+                // ---- step 5: players
+                case "inventory_get": Request(CmdId.Request_Player_GetInventory, new Id(id), rid); break;
+                case "inventory_set":
+                    Request(CmdId.Request_Player_SetInventory, new Inventory(id, Stacks(r.List("toolbelt")), Stacks(r.List("bag"))), rid);
+                    break;
+                case "item_add":
+                    Request(CmdId.Request_Player_AddItem, new IdItemStack(id, new ItemStack((int)r.Num("item"), (int)r.Num("count", 1))), rid);
+                    break;
+                case "credits_set": Request(CmdId.Request_Player_SetCredits, new IdCredits(id, r.Num("credits")), rid); break;
+                case "credits_add": Request(CmdId.Request_Player_AddCredits, new IdCredits(id, r.Num("credits")), rid); break;
+                case "player_set":
+                {
+                    var set = new PlayerInfoSet { entityId = id };
+                    set.experiencePoints = OptInt(r, "exp");
+                    set.upgradePoints = OptInt(r, "upgrade");
+                    set.health = OptInt(r, "health");
+                    set.healthMax = OptInt(r, "healthMax");
+                    set.food = OptInt(r, "food");
+                    set.oxygen = OptInt(r, "oxygen");
+                    set.stamina = OptInt(r, "stamina");
+                    set.radiation = OptInt(r, "radiation");
+                    set.bodyTemp = OptInt(r, "bodyTemp");
+                    if (r.OptNum("bpTime") is double bp) set.bpRemainingTime = (float)bp;
+                    var sp = r.Str("startPlayfield");
+                    if (!string.IsNullOrEmpty(sp)) set.startPlayfield = sp;
+                    Request(CmdId.Request_Player_SetPlayerInfo, set, rid);
+                    break;
+                }
+                case "teleport":
+                {
+                    var pos = new PVector3((float)r.Num("x"), (float)r.Num("y"), (float)r.Num("z"));
+                    var rot = new PVector3((float)r.Num("rx"), (float)r.Num("ry"), (float)r.Num("rz"));
+                    var pf = r.Str("pf");
+                    if (!string.IsNullOrEmpty(pf)) Request(CmdId.Request_Player_ChangePlayerfield, new IdPlayfieldPositionRotation(id, pf, pos, rot), rid);
+                    else Request(CmdId.Request_Entity_Teleport, new IdPositionRotation(id, pos, rot), rid);
+                    break;
+                }
+                case "bp_finish": Request(CmdId.Request_Blueprint_Finish, new Id(id), rid); break;
+                case "banned": Request(CmdId.Request_GetBannedPlayers, null, rid); break;
                 default:
-                    _link.Send(Ev("error", "op", op, "code", "unknown_op"));
+                    _link.Send(Ev("error", "op", op, "code", "unknown_op", "rid", rid));
                     break;
             }
+        }
+
+        private static int? OptInt(Dictionary<string, object> r, string k)
+        {
+            var v = r.OptNum(k);
+            return v.HasValue ? (int?)(int)v.Value : null;
+        }
+
+        private static ItemStack[] Stacks(List<object> list)
+        {
+            var result = new List<ItemStack>();
+            if (list != null)
+                foreach (var o in list)
+                {
+                    var d = o as Dictionary<string, object>;
+                    if (d == null || d.Num("id") <= 0 || d.Num("count") <= 0) continue;
+                    var st = new ItemStack((int)d.Num("id"), (int)d.Num("count"));
+                    st.slotIdx = (byte)d.Num("slot");
+                    st.ammo = (int)d.Num("ammo");
+                    st.decay = (int)d.Num("decay");
+                    result.Add(st);
+                }
+            return result.ToArray();
+        }
+
+        private static List<object> StacksJson(ItemStack[] stacks)
+        {
+            var list = new List<object>();
+            if (stacks != null)
+                foreach (var st in stacks)
+                    list.Add(new Dictionary<string, object> { ["id"] = st.id, ["count"] = st.count, ["slot"] = (int)st.slotIdx, ["ammo"] = st.ammo, ["decay"] = st.decay });
+            return list;
         }
 
         private static string Text(Dictionary<string, object> r)
@@ -97,10 +176,16 @@ namespace Eam.Mod
             return t.Length > 500 ? t.Substring(0, 500) : t;
         }
 
-        private void Request(CmdId id, object data)
+        private void Request(CmdId id, object data, string rid = null, bool full = false)
         {
             unchecked { _seq++; }
             if (_seq == 0) _seq = 1;
+            if (rid != null || full)
+            {
+                if (_pending.Count > 1000) _pending.Clear(); // answers that never came: forget them
+                _pending[_seq] = new Pending { Rid = rid, Full = full };
+            }
+            else _pending.Remove(_seq);
             _api.Game_Request(id, _seq, data);
         }
 
@@ -112,8 +197,14 @@ namespace Eam.Mod
             if (link == null || !link.Connected) return;
             try
             {
-                var msg = Translate(eventId, data);
-                if (msg != null) link.Send(msg);
+                Pending pending;
+                if (_pending.TryGetValue(seqNr, out pending)) _pending.Remove(seqNr);
+                var msg = Translate(eventId, data, pending != null && pending.Full);
+                if (msg != null)
+                {
+                    if (pending != null && pending.Rid != null) msg["rid"] = pending.Rid;
+                    link.Send(msg);
+                }
             }
             catch (Exception e)
             {
@@ -121,7 +212,7 @@ namespace Eam.Mod
             }
         }
 
-        private Dictionary<string, object> Translate(CmdId id, object data)
+        private Dictionary<string, object> Translate(CmdId id, object data, bool full)
         {
             switch (id)
             {
@@ -129,7 +220,33 @@ namespace Eam.Mod
                 case CmdId.Event_Player_Disconnected when data is Id d: return Ev("player_disconnected", "id", d.id);
                 case CmdId.Event_Player_ChangedPlayfield when data is IdPlayfield ip: return Ev("player_playfield", "id", ip.id, "pf", ip.playfield);
                 case CmdId.Event_Player_List when data is IdList l: return Ev("player_list", "ids", l.list ?? new List<int>());
-                case CmdId.Event_Player_Info when data is PlayerInfo p: return PlayerInfo(p);
+                case CmdId.Event_Player_Info when data is PlayerInfo p:
+                {
+                    var info = PlayerInfo(p);
+                    if (full)
+                    {
+                        info["toolbelt"] = StacksJson(p.toolbar);
+                        info["bag"] = StacksJson(p.bag);
+                        info["bpInFactory"] = p.bpInFactory;
+                        info["bpRemaining"] = p.bpRemainingTime;
+                        info["startPf"] = p.startPlayfield;
+                        info["origin"] = (int)p.origin;
+                        info["steamOwnerId"] = p.steamOwnerId;
+                        info["clientId"] = p.clientId;
+                    }
+                    return info;
+                }
+                case CmdId.Event_Player_Inventory when data is Inventory inv:
+                    return Ev("inventory", "id", inv.playerId, "toolbelt", StacksJson(inv.toolbelt), "bag", StacksJson(inv.bag));
+                case CmdId.Event_Player_Credits when data is IdCredits cr: return Ev("credits", "id", cr.id, "credits", cr.credits);
+                case CmdId.Event_BannedPlayers when data is BannedPlayerData bans:
+                {
+                    var bl = new List<object>();
+                    if (bans.BannedPlayers != null)
+                        foreach (var b in bans.BannedPlayers) bl.Add(Ev("b", "steamId", b.steam64Id.ToString(), "until", b.dateTime));
+                    return Ev("banned", "list", bl);
+                }
+                case CmdId.Event_Ok: return Ev("ok");
                 case CmdId.Event_Playfield_List when data is PlayfieldList pl: return Ev("playfield_list", "list", pl.playfields ?? new List<string>());
                 case CmdId.Event_Playfield_Stats when data is PlayfieldStats s:
                     return Ev("playfield_stats", "pf", s.playfield, "fps", s.fps, "fpsmin", s.fpsmin, "mem", s.mem, "players", s.players,
@@ -153,6 +270,7 @@ namespace Eam.Mod
                     return Ev("factions", "list", list);
                 case CmdId.Event_Faction_Changed when data is FactionChangeInfo fc: return Ev("faction_changed", "id", fc.id, "factionId", fc.factionId);
                 case CmdId.Event_Error when data is ErrorInfo err: return Ev("error", "code", err.errorType.ToString());
+                case CmdId.Event_Error: return Ev("error", "code", "game_error");
                 default: return null;
             }
         }

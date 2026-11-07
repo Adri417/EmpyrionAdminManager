@@ -319,6 +319,15 @@ public sealed class ServerData
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
+    /// <summary>Consistent copy of this database (SQLite backup API), safe while EAM keeps writing.</summary>
+    public void SnapshotTo(string file)
+    {
+        using var src = _db.Open();
+        using var dst = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={file};Pooling=False");
+        dst.Open();
+        src.BackupDatabase(dst);
+    }
+
     private void Prune()
     {
         using var c = _db.Open();

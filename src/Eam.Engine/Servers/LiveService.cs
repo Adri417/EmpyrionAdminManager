@@ -73,7 +73,43 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
     private readonly ConcurrentDictionary<long, bool> _dirty = new();
     private readonly ConcurrentDictionary<long, string> _lastPushed = new();
     private readonly ConcurrentDictionary<string, ServerData> _data = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _waiters = new();
     private CancellationToken _stopping;
+
+    public bool IsLinked(long id) => _links.ContainsKey(id);
+
+    /// <summary>
+    /// Sends a request to the server's EAM mod and waits for the game's answer (same "rid").
+    /// The answer is an "ok", an "error" or the requested data.
+    /// </summary>
+    public async Task<JsonElement> RequestAsync(long id, Dictionary<string, object?> request, TimeSpan? timeout = null)
+    {
+        if (!_links.TryGetValue(id, out var link)) throw new ServerException("mod_not_connected");
+        var rid = Guid.NewGuid().ToString("N")[..12];
+        request["rid"] = rid;
+        var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _waiters[rid] = tcs;
+        try
+        {
+            await link.SendAsync(request);
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(timeout ?? TimeSpan.FromSeconds(10)));
+            if (done != tcs.Task) throw new ServerException("game_timeout");
+            var answer = tcs.Task.Result;
+            if (Str(answer, "ev") == "error") throw new ServerException("game_error", Str(answer, "code"));
+            return answer;
+        }
+        finally { _waiters.TryRemove(rid, out _); }
+    }
+
+    /// <summary>Fire-and-forget request to the mod (no answer expected).</summary>
+    public async Task SendToModAsync(long id, object request)
+    {
+        if (!_links.TryGetValue(id, out var link)) throw new ServerException("mod_not_connected");
+        await link.SendAsync(request);
+    }
+
+    /// <summary>Called when a player joins: messages left while they were offline.</summary>
+    public event Func<ServerDefinition, LivePlayer, Task>? PlayerJoined;
 
     public ServerLive Live(long id) => _live.GetOrAdd(id, _ => new ServerLive());
 
@@ -340,6 +376,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
     private async Task HandleAsync(ServerDefinition def, ServerLive l, LinkClient link, JsonElement m)
     {
         var ev = Str(m, "ev");
+        if (Str(m, "rid") is { } rid && _waiters.TryRemove(rid, out var waiter)) waiter.TrySetResult(m.Clone());
         switch (ev)
         {
             case "hello":
@@ -356,7 +393,10 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 LivePlayer? gone;
                 lock (l.Gate) { l.Players.Remove(id, out gone); }
                 if (gone?.SteamId is { } steam)
+                {
                     Data(def).PlayerSeen(steam, gone.Id, gone.Name, (long)(DateTime.UtcNow - gone.PlaytimeCountedUtc).TotalSeconds);
+                    Data(def).PlayerEvent(steam, gone.Name, "leave", gone.Playfield);
+                }
                 if (gone is not null) await hub.BroadcastAsync(new { type = "player_left", id = def.Id, name = gone.Name }, CancellationToken.None);
                 break;
             }
@@ -400,7 +440,12 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     l.Players[id] = p;
                 }
                 if (p.SteamId is { Length: > 0 } s) Data(def).PlayerSeen(s, id, p.Name, addSeconds);
-                if (isNew) await hub.BroadcastAsync(new { type = "player_joined", id = def.Id, name = p.Name }, CancellationToken.None);
+                if (isNew)
+                {
+                    if (p.SteamId is { Length: > 0 } s2) Data(def).PlayerEvent(s2, p.Name, "join", p.Playfield);
+                    await hub.BroadcastAsync(new { type = "player_joined", id = def.Id, name = p.Name }, CancellationToken.None);
+                    if (PlayerJoined is { } handler) _ = Task.Run(() => handler(def, p));
+                }
                 break;
             }
 
@@ -410,8 +455,12 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 break;
 
             case "player_playfield":
-                lock (l.Gate) { if (l.Players.TryGetValue(Int(m, "id"), out var pp)) pp.Playfield = Str(m, "pf"); }
+            {
+                LivePlayer? moved;
+                lock (l.Gate) { if (l.Players.TryGetValue(Int(m, "id"), out moved)) moved.Playfield = Str(m, "pf"); }
+                if (moved?.SteamId is { Length: > 0 } ms) Data(def).PlayerEvent(ms, moved.Name, "playfield", Str(m, "pf"));
                 break;
+            }
 
             case "playfield_list":
             {
@@ -472,6 +521,12 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
             case "chat":
                 await OnChatAsync(def, l, m);
                 return; // the chat message itself is pushed, no need for a full snapshot
+
+            case "ok":
+            case "inventory":
+            case "credits":
+            case "banned":
+                return;
 
             case "error":
                 log.LogDebug("Mod of '{Name}' reported {Code} for {Op}", def.Name, Str(m, "code"), Str(m, "op"));
