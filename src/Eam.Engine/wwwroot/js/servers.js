@@ -3,6 +3,7 @@ import { t, extend, errorText } from "./i18n.js";
 import { html, raw, mount, $, $$, toast } from "./dom.js";
 import { liveEvent, fetchLive, renderLive, renderChat, playerCount, live } from "./live.js";
 import { toolsEvent, toolTabs, renderTool } from "./tools.js";
+import { featureTabs, isFeatureTab, renderFeature, featureEvent } from "./features.js";
 
 extend({
   fr: {
@@ -89,7 +90,7 @@ export function initServers(me) { store.me = me; }
 
 /** Called by the live socket. */
 export function serverEvent(msg) {
-  if (toolsEvent(msg)) return;
+  if (toolsEvent(msg) || featureEvent(msg)) return;
   if (liveEvent(msg, (id) => store.servers.find((s) => s.id === id)?.name ?? "")) {
     if (msg.type === "live") store.onChange?.();
     return;
@@ -218,7 +219,7 @@ export async function renderServerDetail(page, id, setTitle) {
         ${progressBar(s)}
         ${s.autoRestartSuspended ? html`<div class="error">${t("crash_loop")}</div>` : s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
       </div>` : ""}
-      <nav class="tabs">${["overview", "chat", ...toolTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
+      <nav class="tabs">${["overview", "chat", ...toolTabs(store.me.role), ...featureTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
     applyBars(page);
@@ -280,6 +281,11 @@ export async function renderServerDetail(page, id, setTitle) {
       if (el.dataset.tab === tab) return; // these screens refresh themselves
       el.dataset.tab = tab;
       renderTool(tab, el, s, store.me);
+      return;
+    } else if (isFeatureTab(tab, store.me.role)) {
+      if (el.dataset.tab === tab) return; // these screens refresh themselves
+      el.dataset.tab = tab;
+      renderFeature(tab, el, s, store.me);
       return;
     } else if (tab === "console") {
       if (el.dataset.tab === "console") return; // keep the console content between live updates

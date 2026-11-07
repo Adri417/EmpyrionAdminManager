@@ -23,6 +23,8 @@ public sealed class LivePlayer
     public float X { get; set; }
     public float Y { get; set; }
     public float Z { get; set; }
+    public int Origin { get; set; }
+    public int Permission { get; set; }
     public DateTime OnlineSinceUtc { get; set; } = DateTime.UtcNow;
     internal DateTime PlaytimeCountedUtc = DateTime.UtcNow;
 }
@@ -110,6 +112,55 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
 
     /// <summary>Called when a player joins: messages left while they were offline.</summary>
     public event Func<ServerDefinition, LivePlayer, Task>? PlayerJoined;
+
+    /// <summary>Every message from the mod (steps 6 to 9 listen to it). Handlers run in the background.</summary>
+    public event Func<ServerDefinition, string, JsonElement, Task>? ModEvent;
+
+    /// <summary>A chat message written in game (chatbot, filter, alerts, Discord).</summary>
+    public event Func<ServerDefinition, ChatEntry, LivePlayer?, Task>? ChatReceived;
+
+    /// <summary>A player currently online, by entity id.</summary>
+    public LivePlayer? Online(long id, int entityId)
+    {
+        var l = Live(id);
+        lock (l.Gate) return l.Players.TryGetValue(entityId, out var p) ? p : null;
+    }
+
+    public LivePlayer? OnlineBySteam(long id, string steamId)
+    {
+        var l = Live(id);
+        lock (l.Gate) return l.Players.Values.FirstOrDefault(p => p.SteamId == steamId);
+    }
+
+    public IReadOnlyList<LivePlayer> OnlinePlayers(long id)
+    {
+        var l = Live(id);
+        lock (l.Gate) return l.Players.Values.ToList();
+    }
+
+    public string? FactionName(long id, int factionId)
+    {
+        var l = Live(id);
+        lock (l.Gate) return l.Factions.TryGetValue(factionId, out var f) ? f : null;
+    }
+
+    public IReadOnlyDictionary<int, string> Factions(long id)
+    {
+        var l = Live(id);
+        lock (l.Gate) return new Dictionary<int, string>(l.Factions);
+    }
+
+    private void Raise(ServerDefinition def, string ev, JsonElement m)
+    {
+        if (ModEvent is not { } handlers) return;
+        var copy = m.Clone();
+        foreach (var h in handlers.GetInvocationList().Cast<Func<ServerDefinition, string, JsonElement, Task>>())
+            _ = Task.Run(async () =>
+            {
+                try { await h(def, ev, copy); }
+                catch (Exception e) { log.LogWarning(e, "Handler of '{Ev}' failed", ev); }
+            });
+    }
 
     public ServerLive Live(long id) => _live.GetOrAdd(id, _ => new ServerLive());
 
@@ -377,6 +428,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
     {
         var ev = Str(m, "ev");
         if (Str(m, "rid") is { } rid && _waiters.TryRemove(rid, out var waiter)) waiter.TrySetResult(m.Clone());
+        if (ev is not null and not "chat") Raise(def, ev, m);
         switch (ev)
         {
             case "hello":
@@ -434,6 +486,8 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     p.Level = Int(m, "upgrade");
                     p.Exp = Int(m, "exp");
                     p.X = (float)Num(m, "x"); p.Y = (float)Num(m, "y"); p.Z = (float)Num(m, "z");
+                    p.Origin = Int(m, "origin");
+                    p.Permission = Int(m, "permission");
                     var now = DateTime.UtcNow;
                     addSeconds = isNew ? 0 : (long)(now - p.PlaytimeCountedUtc).TotalSeconds;
                     p.PlaytimeCountedUtc = now;
@@ -560,9 +614,19 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         }
         var entry = Data(def).AddChat(DateTime.UtcNow, Str(m, "channel") ?? "Global", senderId, name, steam, Int(m, "recipient", -1), text, "game");
         await hub.BroadcastAsync(new { type = "chat", id = def.Id, msg = entry }, CancellationToken.None);
+        if (ChatReceived is { } handlers && senderType == "Player")
+        {
+            var sender = Online(def.Id, senderId);
+            foreach (var h in handlers.GetInvocationList().Cast<Func<ServerDefinition, ChatEntry, LivePlayer?, Task>>())
+                _ = Task.Run(async () =>
+                {
+                    try { await h(def, entry, sender); }
+                    catch (Exception e) { log.LogWarning(e, "Chat handler failed"); }
+                });
+        }
     }
 
-    private static string? Str(JsonElement e, string k) =>
+    internal static string? Str(JsonElement e, string k) =>
         e.TryGetProperty(k, out var v) ? v.ValueKind switch
         {
             JsonValueKind.String => v.GetString(),
@@ -572,9 +636,9 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
             _ => null,
         } : null;
 
-    private static double Num(JsonElement e, string k) =>
+    internal static double Num(JsonElement e, string k) =>
         e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
 
-    private static int Int(JsonElement e, string k, int fallback = 0) =>
+    internal static int Int(JsonElement e, string k, int fallback = 0) =>
         e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? (int)v.GetDouble() : fallback;
 }

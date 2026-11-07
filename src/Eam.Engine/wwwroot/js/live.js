@@ -1,6 +1,6 @@
 // Step 3: live view of a running server (players, playfields, performance) and chat.
 import { api } from "./api.js";
-import { t, extend, errorText } from "./i18n.js";
+import { t, extend, errorText, currentLanguage } from "./i18n.js";
 import { html, mount, $, toast, formatBytes } from "./dom.js";
 
 extend({
@@ -11,7 +11,7 @@ extend({
     mod_ok: "Mod EAM connecté", mod_waiting: "Mod EAM : en attente", col_name: "Nom", col_faction: "Faction", col_playfield: "Playfield",
     col_level: "Niveau", col_ping: "Ping", col_online: "Connecté depuis", col_players: "Joueurs", col_mem: "Mémoire",
     col_structs: "Structures", col_pid: "Processus",
-    chat_empty: "Aucun message pour l'instant.", chat_older: "Messages plus anciens", chat_mode_chat: "Dans le chat",
+    chat_empty: "Aucun message pour l'instant.", chat_older: "Messages plus anciens", translate: "Traduire", chat_mode_chat: "Dans le chat",
     chat_mode_popup: "Fenêtre à l'écran de tous", chat_placeholder: "Votre message…", chat_readonly: "Lecture seule : votre rôle ne permet pas d'envoyer de messages.",
     ch_Global: "Global", ch_Faction: "Faction", ch_Alliance: "Alliance", ch_SinglePlayer: "Privé", ch_Server: "Serveur",
     joined: "{0} s'est connecté à {1}", left: "{0} s'est déconnecté de {1}",
@@ -26,7 +26,7 @@ extend({
     mod_ok: "EAM mod connected", mod_waiting: "EAM mod: waiting", col_name: "Name", col_faction: "Faction", col_playfield: "Playfield",
     col_level: "Level", col_ping: "Ping", col_online: "Online for", col_players: "Players", col_mem: "Memory",
     col_structs: "Structures", col_pid: "Process",
-    chat_empty: "No message yet.", chat_older: "Older messages", chat_mode_chat: "In the chat",
+    chat_empty: "No message yet.", chat_older: "Older messages", translate: "Translate", chat_mode_chat: "In the chat",
     chat_mode_popup: "Message box on everyone's screen", chat_placeholder: "Your message…", chat_readonly: "Read only: your role cannot send messages.",
     ch_Global: "Global", ch_Faction: "Faction", ch_Alliance: "Alliance", ch_SinglePlayer: "Private", ch_Server: "Server",
     joined: "{0} joined {1}", left: "{0} left {1}",
@@ -106,7 +106,8 @@ function line(m) {
   const time = new Date(m.utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return html`<div class="chat-line ${m.source === "eam" ? "from-eam" : ""}">
     <span class="chat-time">${time}</span><span class="badge">${t("ch_" + m.channel) === "ch_" + m.channel ? m.channel : t("ch_" + m.channel)}</span>
-    <b>${m.senderName}</b> <span class="chat-text">${m.text}</span></div>`;
+    <b>${m.senderName}</b> <span class="chat-text">${m.text}</span>
+    <button type="button" class="btn small tr" data-tr="${m.id}" title="${t("translate")}">🌐</button></div>`;
 }
 
 export async function renderChat(el, s, me) {
@@ -138,6 +139,21 @@ export async function renderChat(el, s, me) {
   };
   try { live.chat[s.id] = await api.get(`/api/servers/${s.id}/chat?limit=100`); } catch { live.chat[s.id] = []; }
   draw(false);
+  list.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-tr]");
+    if (!b) return;
+    const m = (live.chat[s.id] || []).find((x) => String(x.id) === b.dataset.tr);
+    if (!m) return;
+    b.disabled = true;
+    try {
+      const r = await api.get(`/api/translate?to=${currentLanguage()}&text=${encodeURIComponent(m.text)}`);
+      const span = document.createElement("div");
+      span.className = "translated";
+      span.textContent = `${r.from ? `[${r.from}] ` : ""}${r.text}`;
+      b.parentElement.appendChild(span);
+      b.remove();
+    } catch (ex) { toast(errorText(ex.code), true); b.disabled = false; }
+  });
   live.chatListener = (id) => { if (id === s.id && list.isConnected) draw(true); };
   $("#chat-form", el)?.addEventListener("submit", async (e) => {
     e.preventDefault();

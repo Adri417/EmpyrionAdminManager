@@ -204,3 +204,30 @@ h4 { margin: 12px 0 4px; color: var(--muted); font-size: 13px; font-weight: 600;
   .row-actions { white-space: normal; }
 }
 .history .chat-time { margin-right: 8px; }
+
+/* ---- steps 6 to 9 */
+dialog.wide { width: min(860px, 96vw); max-height: 90vh; overflow: auto; }
+.badge.warn { background: var(--warn); color: #000; }
+.badge.bad { background: var(--bad); color: #000; }
+canvas.map { width: 100%; height: 480px; display: block; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); cursor: grab; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.btn.active { border-color: var(--accent); color: var(--accent); }
+.settings-form details.card summary { cursor: pointer; margin-bottom: 8px; }
+.sticky-save { position: sticky; bottom: 0; padding: 10px 0; background: linear-gradient(transparent, var(--bg) 40%); }
+table.rows td { padding: 4px; }
+table.rows input, table.rows select { min-width: 70px; width: 100%; }
+table.rows input[type=checkbox] { min-width: 0; width: auto; }
+svg.chart { width: 100%; height: 170px; display: block; }
+svg.chart .grid-line { stroke: var(--line); stroke-width: 1; }
+svg.chart .axis { fill: var(--muted); font-size: 11px; }
+svg.chart .serie { stroke-width: 1.6; }
+.s0 { stroke: var(--accent); color: var(--accent); } .s1 { stroke: var(--accent-2); color: var(--accent-2); }
+.s2 { stroke: var(--ok); color: var(--ok); } .s3 { stroke: var(--bad); color: var(--bad); }
+.sev-1 { border-left: 3px solid var(--warn); padding-left: 6px; } .sev-2 { border-left: 3px solid var(--bad); padding-left: 6px; }
+.alerts-banner { border-left: 3px solid var(--warn); }
+.chat-line.alert { background: rgb(251 191 36 / .15); }
+.translated { color: var(--muted); font-style: italic; }
+.subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tabs { flex-wrap: wrap; }
+.chat-line .tr { padding: 0 4px; font-size: 11px; opacity: 0; margin-left: 4px; }
+.chat-line:hover .tr, .chat-line .tr:focus { opacity: 1; }
