@@ -30,7 +30,20 @@ async function call(method, url, data) {
   return body;
 }
 
+async function upload(url, file) {
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  let res;
+  try { res = await fetch(url, { method: "POST", credentials: "same-origin", headers: { "X-EAM": "1" }, body: fd }); }
+  catch { throw new ApiError(0, { error: "network" }); }
+  let body = null;
+  try { body = await res.json(); } catch { body = null; }
+  if (!res.ok) throw new ApiError(res.status, body);
+  return body;
+}
+
 export const api = {
+  upload,
   get: (u) => call("GET", u),
   post: (u, d = {}) => call("POST", u, d),
   put: (u, d = {}) => call("PUT", u, d),

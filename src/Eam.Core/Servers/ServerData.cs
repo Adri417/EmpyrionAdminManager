@@ -13,9 +13,10 @@ public sealed record PlayerEventEntry(long Id, DateTime Utc, string Kind, string
 public sealed record SeenPlayer(string SteamId, int EntityId, string Name, DateTime FirstSeenUtc, DateTime LastSeenUtc, long PlaytimeSeconds);
 
 /// <summary>The separate database of one game server (eam\server.db in the server's folder).</summary>
-public sealed class ServerData
+public sealed partial class ServerData
 {
     public const int ChatRetentionDays = 90;
+    public const int PositionRetentionDays = 14;
 
     private static readonly string[] Migrations =
     [
@@ -70,6 +71,52 @@ public sealed class ServerData
             created_utc   TEXT NOT NULL,
             by_user       TEXT NOT NULL,
             delivered_utc TEXT NULL
+        );
+        """,
+        // 3: steps 6 to 9 (structures, history, journal, statistics, chat moderation, gameplay)
+        """
+        CREATE TABLE structures (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL, type INTEGER NOT NULL, pf TEXT NOT NULL,
+            faction_group INTEGER NOT NULL, faction_id INTEGER NOT NULL, x REAL, y REAL, z REAL,
+            blocks INTEGER, devices INTEGER, class INTEGER, core INTEGER, powered INTEGER, last_visited_utc TEXT NULL,
+            solar_system TEXT NULL, first_seen_utc TEXT NOT NULL, last_seen_utc TEXT NOT NULL, removed_utc TEXT NULL,
+            warned_utc TEXT NULL
+        );
+        CREATE TABLE structure_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, utc TEXT NOT NULL, structure_id INTEGER NOT NULL,
+            kind TEXT NOT NULL, old TEXT NULL, new TEXT NULL, by_user TEXT NULL
+        );
+        CREATE INDEX structure_events_sid ON structure_events(structure_id, id);
+        CREATE TABLE positions (
+            utc TEXT NOT NULL, kind TEXT NOT NULL, ref TEXT NOT NULL, name TEXT NOT NULL, pf TEXT NOT NULL,
+            x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL
+        );
+        CREATE INDEX positions_pf ON positions(pf, utc);
+        CREATE INDEX positions_ref ON positions(ref, utc);
+        CREATE TABLE journal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, utc TEXT NOT NULL, category TEXT NOT NULL, severity INTEGER NOT NULL,
+            steam_id TEXT NULL, name TEXT NULL, pf TEXT NULL, text TEXT NOT NULL
+        );
+        CREATE INDEX journal_cat ON journal(category, id);
+        CREATE TABLE stats (
+            utc TEXT NOT NULL, scope TEXT NOT NULL, cpu REAL, mem REAL, players INTEGER, playfields INTEGER, fps REAL, structs INTEGER
+        );
+        CREATE INDEX stats_utc ON stats(scope, utc);
+        CREATE TABLE counters (
+            steam_id TEXT NOT NULL, key TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, last_utc TEXT NOT NULL, value TEXT NULL,
+            PRIMARY KEY (steam_id, key)
+        );
+        CREATE TABLE miners (
+            steam_id TEXT NOT NULL, ore TEXT NOT NULL, level INTEGER NOT NULL, stored REAL NOT NULL DEFAULT 0,
+            fuel_hours REAL NOT NULL DEFAULT 0, updated_utc TEXT NOT NULL, PRIMARY KEY (steam_id, ore)
+        );
+        CREATE TABLE game_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, pf TEXT NOT NULL, x REAL, y REAL, z REAL,
+            kit TEXT NOT NULL DEFAULT '[]', keep_inventory INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL, created_utc TEXT NOT NULL
+        );
+        CREATE TABLE game_event_players (
+            event_id INTEGER NOT NULL, steam_id TEXT NOT NULL, name TEXT NOT NULL, state TEXT NOT NULL,
+            saved TEXT NULL, back_pf TEXT NULL, back_x REAL, back_y REAL, back_z REAL, PRIMARY KEY (event_id, steam_id)
         );
         """,
     ];
@@ -332,7 +379,13 @@ public sealed class ServerData
     {
         using var c = _db.Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "DELETE FROM chat WHERE utc < $limit;";
+        cmd.CommandText = """
+            DELETE FROM chat WHERE utc < $limit;
+            DELETE FROM positions WHERE utc < $pos;
+            DELETE FROM stats WHERE utc < $pos;
+            DELETE FROM journal WHERE utc < $limit;
+            """;
+        cmd.Parameters.AddWithValue("$pos", DateTime.UtcNow.AddDays(-PositionRetentionDays).ToString("O"));
         cmd.Parameters.AddWithValue("$limit", DateTime.UtcNow.AddDays(-ChatRetentionDays).ToString("O"));
         cmd.ExecuteNonQuery();
     }
