@@ -69,6 +69,11 @@ builder.Services.AddSingleton<Alerts>();
 builder.Services.AddSingleton<CommunityService>();
 builder.Services.AddSingleton<DiscordService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DiscordService>());
+builder.Services.AddSingleton<SecurityService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SecurityService>());
+builder.Services.AddSingleton<ModService>();
+builder.Services.AddSingleton<GameplayService>();
+builder.Services.AddSingleton<MaintenanceService>();
 
 var keys = builder.Services.AddDataProtection()
     .SetApplicationName(AppInfo.ServiceName)
@@ -95,6 +100,12 @@ builder.Services.AddAuthorization(o =>
             ctx.User.FindFirst(AuthEndpoints.RoleClaim)?.Value is { } r && Roles.AtLeast(r, role)));
 });
 
+var certificates = new CertificateHolder();
+builder.Services.AddSingleton(certificates);
+builder.Services.AddSingleton<LetsEncryptService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LetsEncryptService>());
+var letsEncrypt = config.RemoteAccess.Enabled && config.RemoteAccess.LetsEncrypt.Enabled ? config.RemoteAccess.LetsEncrypt : null;
+
 builder.WebHost.ConfigureKestrel(k =>
 {
     k.AddServerHeader = false;
@@ -104,14 +115,34 @@ builder.WebHost.ConfigureKestrel(k =>
     if (config.RemoteAccess.Enabled)
     {
         using var lf = LoggerFactory.Create(l => l.AddProvider(new FileLoggerProvider(paths.LogsDir)));
-        var cert = Certificates.LoadOrCreate(paths, config.RemoteAccess, lf.CreateLogger("Certificates"));
-        k.Listen(IPAddress.Any, config.RemoteAccess.Port, l => l.UseHttps(cert));
+        certificates.Current = (letsEncrypt is null ? null : LetsEncryptService.LoadStored(paths, letsEncrypt))
+                               ?? Certificates.LoadOrCreate(paths, config.RemoteAccess, lf.CreateLogger("Certificates"));
+        // The certificate is read at each connection: a renewed Let's Encrypt certificate applies without restarting.
+        k.Listen(IPAddress.Any, config.RemoteAccess.Port, l => l.UseHttps(o => o.ServerCertificateSelector = (_, _) => certificates.Current));
+        if (letsEncrypt is not null) k.Listen(IPAddress.Any, letsEncrypt.HttpPort);
     }
 });
 
 var app = builder.Build();
 var log = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Engine");
 
+if (letsEncrypt is not null)
+{
+    // Plain HTTP port: only Let's Encrypt's check is answered, everything else goes to HTTPS.
+    app.Use(async (ctx, next) =>
+    {
+        if (ctx.Connection.LocalPort != letsEncrypt.HttpPort) { await next(); return; }
+        const string prefix = "/.well-known/acme-challenge/";
+        var path = ctx.Request.Path.Value ?? "";
+        if (path.StartsWith(prefix, StringComparison.Ordinal) && LetsEncryptService.Challenges.TryGetValue(path[prefix.Length..], out var answer))
+        {
+            ctx.Response.ContentType = "text/plain";
+            await ctx.Response.WriteAsync(answer);
+            return;
+        }
+        ctx.Response.Redirect($"https://{letsEncrypt.Domain}:{config.RemoteAccess.Port}{path}");
+    });
+}
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
@@ -131,8 +162,11 @@ ServerToolsEndpoints.Map(app);
 WorldEndpoints.Map(app);
 FeatureEndpoints.Map(app);
 CommunityEndpoints.Map(app);
+SecurityEndpoints.Map(app);
+ExtraEndpoints.Map(app);
 app.Services.GetRequiredService<PlayerService>(); // subscribes to player joins (offline messages)
 app.Services.GetRequiredService<CommunityService>(); // chatbot, filter, messages (listens to the chat)
+app.Services.GetRequiredService<GameplayService>(); // autominer and events commands
 app.Map("/ws", (HttpContext ctx, LiveHub hub) => hub.Accept(ctx)).RequireAuthorization(Roles.Viewer);
 app.MapFallback(ctx =>
 {
