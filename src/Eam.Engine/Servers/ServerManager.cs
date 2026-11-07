@@ -84,6 +84,62 @@ public sealed class ServerManager : BackgroundService
 
     private ServerDefinition Get(long id) => _store.Find(id) ?? throw new ServerException("not_found");
 
+    public ServerDefinition Definition(long id) => Get(id);
+
+    public IReadOnlyList<ServerDefinition> Definitions() => _store.List();
+
+    /// <summary>Runs an operation with the server's lock (nothing else runs on it meanwhile).</summary>
+    public Task RunExclusiveAsync(long id, string operation, bool requireStopped, Func<ServerDefinition, ServerRuntime, Task> action) =>
+        WithLock(id, operation, async (def, rt) =>
+        {
+            if (requireStopped) RequireStopped(rt, allowNotInstalled: false);
+            await action(def, rt);
+        });
+
+    /// <summary>Progress of a long job shown on the server (backup, download…), without taking the lock.</summary>
+    public async Task ReportProgressAsync(long id, double? percent, string? text)
+    {
+        var rt = Runtime(id);
+        rt.Progress = percent;
+        rt.ProgressText = text;
+        await Push(id);
+    }
+
+    /// <summary>
+    /// Restart that runs <paramref name="whileStopped"/> between the stop and the start (backup, update…).
+    /// The server is started again even if that step fails.
+    /// </summary>
+    public Task RestartWithAsync(long id, int delayMinutes, string? message, string by, string operation,
+        Func<ServerDefinition, ServerRuntime, Task>? whileStopped, bool startAfter = true) => WithLock(id, operation, async (def, rt) =>
+    {
+        var wasUp = rt.State is ServerState.Running or ServerState.Starting;
+        if (wasUp) await StopInternalAsync(def, rt, delayMinutes, message, by);
+        Exception? failure = null;
+        if (whileStopped is not null)
+        {
+            try { await whileStopped(def, rt); }
+            catch (Exception e) { failure = e; ServerLog(def, $"{operation}: step while stopped failed: {e.Message}"); }
+        }
+        if (startAfter && wasUp) await StartInternalAsync(Get(id), rt, by);
+        if (failure is not null) throw failure is ServerException ? failure : new ServerException("step_failed", failure.Message);
+    });
+
+    /// <summary>SteamCMD update of the game files, used by the scheduler inside <see cref="RestartWithAsync"/>.</summary>
+    public async Task UpdateFilesAsync(ServerDefinition def, ServerRuntime rt, string by)
+    {
+        rt.State = ServerState.Updating;
+        await Push(def.Id);
+        try
+        {
+            var build = await _steam.InstallOrUpdateAsync(def.GameDir, def.Branch, false, null, line => ServerLog(def, "[steamcmd] " + line), CancellationToken.None);
+            _store.Update(def with { BuildId = build ?? def.BuildId });
+            ServerLog(def, $"Game files updated by {by} (build {build ?? "?"})");
+        }
+        finally { rt.State = ServerState.Stopped; }
+    }
+
+    public SteamCmd Steam => _steam;
+
     // ------------------------------------------------------------------ create / rename / settings / delete
 
     public async Task<ServerDefinition> CreateAsync(CreateServerRequest req, string by)
@@ -311,7 +367,7 @@ public sealed class ServerManager : BackgroundService
         File.Move(f + ".tmp", f, overwrite: true);
     }
 
-    private static void ApplyManagedKeys(DedicatedYaml y, ServerDefinition def)
+    public static void ApplyManagedKeys(DedicatedYaml y, ServerDefinition def)
     {
         y.Set("ServerConfig", "Srv_Name", def.Name);
         y.Set("ServerConfig", "Srv_Port", def.GamePort.ToString());
@@ -623,7 +679,8 @@ public sealed class ServerManager : BackgroundService
         catch (ServerException e)
         {
             // Errors of interactive actions go back to the caller; only background operations keep them on the server.
-            if (e.Code != "stop_cancelled" && operation is not ("rename" or "settings" or "delete")) rt.LastError = e.Code;
+            if (e.Code != "stop_cancelled" && operation is not ("rename" or "settings" or "delete" or "gameoptions" or "scenario" or "restore" or "server-options"))
+                rt.LastError = e.Code;
             throw;
         }
         finally
@@ -776,6 +833,8 @@ public sealed class ServerManager : BackgroundService
         }
         catch { }
     }
+
+    public Task PushAsync(long id) => Push(id);
 
     private async Task Push(long id)
     {

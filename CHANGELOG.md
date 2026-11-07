@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 (2026-11-07) - Étapes 4 et 5 : sauvegardes, planificateur, options, scénarios, joueurs
+- Sauvegardes de chaque serveur : partie (Saves\Games\<nom>), plans des joueurs, adminconfig.yaml, options et données EAM. Création à chaud, téléchargement, suppression, restauration (serveur arrêté, avec sauvegarde de sécurité avant), conservation des N dernières automatiques, copie dans un dossier Google Drive / OneDrive.
+- Planificateur : redémarrage (avec avertissements et sauvegarde avant), arrêt, démarrage, sauvegarde, message, commande console, wipe de playfields, nettoyage des journaux, mise à jour du jeu. Heures fixes par jour de la semaine ou intervalle ; « Lancer maintenant ».
+- Options : toutes les options de dedicated.yaml (actives ou en commentaire dans le modèle du jeu, avec leur aide), nom de la sauvegarde, scénario, mode, graine, édition du fichier complet, et toutes les options de jeu de la sauvegarde (gameoptions.yaml).
+- Scénarios : liste des scénarios installés, installation et mise à jour de Reforged Eden 1 et 2 (ou de tout scénario) depuis le Steam Workshop, import depuis un dossier, suppression.
+- Joueurs : tous les joueurs vus, fiche détaillée, inventaire (modifiable), crédits, expérience et points, objet à donner (catalogue traduit du scénario), téléportation, soin, plan terminé, message (remis à la prochaine connexion s'il est hors ligne), expulsion, ban/déban, liste des bannis, rôles (adminconfig.yaml), historique complet des actions et des connexions.
+- Mod EAM 0.5.0 : nouvelles commandes (inventaire, crédits, expérience, téléportation, plans, bannis) avec réponse du jeu.
+
 ## 0.3.2 (2026-11-07) - Direct plus réactif, barre du haut
 - Joueurs actualisés toutes les 5 secondes, factions toutes les 15 secondes et immédiatement quand un joueur change de faction (création, départ, suppression).
 - Les écrans ne sont mis à jour que si quelque chose a vraiment changé (pas de trafic ni de redessin inutile).

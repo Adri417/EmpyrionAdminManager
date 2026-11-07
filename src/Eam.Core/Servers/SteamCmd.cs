@@ -68,6 +68,48 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
         finally { Gate.Release(); }
     }
 
+    /// <summary>Empyrion's Steam app (the game, not the dedicated server): owner of the Workshop items.</summary>
+    public const string EmpyrionGameAppId = "383120";
+
+    /// <summary>
+    /// Downloads (or updates) a Steam Workshop item anonymously into <paramref name="downloadDir"/>.
+    /// Returns the folder holding the item, or throws with SteamCMD's error.
+    /// </summary>
+    public async Task<string> DownloadWorkshopItemAsync(string downloadDir, string itemId, IProgress<SteamProgress>? progress,
+        Action<string>? log, CancellationToken ct)
+    {
+        if (!itemId.All(char.IsDigit) || itemId.Length is < 3 or > 20) throw new ArgumentException("invalid_workshop_id");
+        await Gate.WaitAsync(ct);
+        try
+        {
+            await EnsureInstalledAsync(progress, ct);
+            Directory.CreateDirectory(downloadDir);
+            var args = new List<string> { "+force_install_dir", downloadDir, "+login", "anonymous",
+                "+workshop_download_item", EmpyrionGameAppId, itemId, "validate", "+quit" };
+            string? lastError = null;
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                var ok = false;
+                var (code, _, err) = await RunAsync(args, progress, line =>
+                {
+                    log?.Invoke(line);
+                    if (line.Contains("Success. Downloaded item", StringComparison.Ordinal)) ok = true;
+                    var e = line.IndexOf("ERROR!", StringComparison.Ordinal);
+                    if (e >= 0) lastError = line[e..].Trim();
+                }, ct);
+                var folder = WorkshopItemDir(downloadDir, itemId);
+                if (ok && Directory.Exists(folder)) return folder;
+                lastError ??= err ?? $"steamcmd_exit_{code}";
+                log?.Invoke($"Workshop download failed ({lastError}), attempt {attempt}/3");
+            }
+            throw new InvalidOperationException(lastError ?? "workshop_download_failed");
+        }
+        finally { Gate.Release(); }
+    }
+
+    public static string WorkshopItemDir(string root, string itemId) =>
+        Path.Combine(root, "steamapps", "workshop", "content", EmpyrionGameAppId, itemId);
+
     public static string? ReadBuildId(string installDir)
     {
         var manifest = Path.Combine(installDir, "steamapps", $"appmanifest_{EmpyrionDedicatedAppId}.acf");
