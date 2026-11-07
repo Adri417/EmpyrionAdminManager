@@ -71,9 +71,12 @@ builder.Services.AddSingleton<DiscordService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DiscordService>());
 builder.Services.AddSingleton<SecurityService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SecurityService>());
+builder.Services.AddSingleton<PlayerCareService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PlayerCareService>());
 builder.Services.AddSingleton<ModService>();
 builder.Services.AddSingleton<GameplayService>();
 builder.Services.AddSingleton<MaintenanceService>();
+builder.Services.AddSingleton<ImportService>();
 
 var keys = builder.Services.AddDataProtection()
     .SetApplicationName(AppInfo.ServiceName)
@@ -104,6 +107,8 @@ var certificates = new CertificateHolder();
 builder.Services.AddSingleton(certificates);
 builder.Services.AddSingleton<LetsEncryptService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LetsEncryptService>());
+builder.Services.AddSingleton<UpdateService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<UpdateService>());
 var letsEncrypt = config.RemoteAccess.Enabled && config.RemoteAccess.LetsEncrypt.Enabled ? config.RemoteAccess.LetsEncrypt : null;
 
 builder.WebHost.ConfigureKestrel(k =>
@@ -164,6 +169,8 @@ FeatureEndpoints.Map(app);
 CommunityEndpoints.Map(app);
 SecurityEndpoints.Map(app);
 ExtraEndpoints.Map(app);
+ImportEndpoints.Map(app);
+UpdateEndpoints.Map(app);
 app.Services.GetRequiredService<PlayerService>(); // subscribes to player joins (offline messages)
 app.Services.GetRequiredService<CommunityService>(); // chatbot, filter, messages (listens to the chat)
 app.Services.GetRequiredService<GameplayService>(); // autominer and events commands

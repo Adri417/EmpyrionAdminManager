@@ -89,6 +89,8 @@ public sealed class AutoWipeRule
     public int NotVisitedDays { get; set; }
     /// <summary>Removed when it exists for more than this many hours (starter planets; 0 = not used).</summary>
     public int OlderThanHours { get; set; }
+    /// <summary>Removed when it stays on the same playfield for more than this many hours (0 = not used).</summary>
+    public int OnPlayfieldHours { get; set; }
 }
 
 public sealed class ReservedPlayfield
@@ -121,11 +123,23 @@ public sealed class WorldSettings : IFeatureSettings
     public List<ReservedPlayfield> Reserved { get; set; } = [];
     /// <summary>Shared folders newer than this are never treated as obsolete.</summary>
     public int SharedMinAgeHours { get; set; } = 48;
+    /// <summary>"sanction": structures over a limit are given to this faction (abbreviation) after the grace period.</summary>
+    public string SanctionFaction { get; set; } = "";
+    /// <summary>Removed this many hours after being given to the sanction faction (0 = kept).</summary>
+    public int SanctionDestroyHours { get; set; }
+    /// <summary>Alert when the whole server has more structures than this (0 = not checked; the game slows down beyond a few hundred).</summary>
+    public int TotalMaxStructures { get; set; }
+    /// <summary>Player structures nobody visited for this many hours are given to <see cref="PublicFaction"/> (0 = never).</summary>
+    public int UntouchedPublicHours { get; set; }
+    public string PublicFaction { get; set; } = "";
 
     public void Validate()
     {
         FeatureStore.Need(RefreshMinutes is >= 1 and <= 60, "invalid_refresh");
-        FeatureStore.Need(LimitAction is "warn" or "destroy", "invalid_limit_action");
+        FeatureStore.Need(LimitAction is "warn" or "destroy" or "sanction", "invalid_limit_action");
+        FeatureStore.Need(LimitAction != "sanction" || Regex.IsMatch(SanctionFaction.Trim(), "^[^'\\s]{1,12}$"), "invalid_faction");
+        FeatureStore.Need(UntouchedPublicHours == 0 || Regex.IsMatch(PublicFaction.Trim(), "^[^'\\s]{1,12}$"), "invalid_faction");
+        FeatureStore.Need(SanctionDestroyHours >= 0 && TotalMaxStructures >= 0 && UntouchedPublicHours >= 0, "invalid_value");
         FeatureStore.Need(LimitGraceHours is >= 0 and <= 24 * 30, "invalid_grace");
         FeatureStore.Need(SharedMinAgeHours is >= 1 and <= 24 * 365, "invalid_age");
         foreach (var l in Limits)
@@ -137,7 +151,7 @@ public sealed class WorldSettings : IFeatureSettings
         foreach (var w in AutoWipe)
         {
             FeatureStore.Need(w.Type == "any" || EntityTypes.Parse(w.Type) > 0, "invalid_autowipe");
-            FeatureStore.Need(w.NotVisitedDays >= 0 && w.OlderThanHours >= 0 && w.NotVisitedDays + w.OlderThanHours > 0, "invalid_autowipe");
+            FeatureStore.Need(w.NotVisitedDays >= 0 && w.OlderThanHours >= 0 && w.OnPlayfieldHours >= 0 && w.NotVisitedDays + w.OlderThanHours + w.OnPlayfieldHours > 0, "invalid_autowipe");
         }
         foreach (var r in Reserved)
         {
@@ -191,6 +205,11 @@ public sealed class CommunitySettings : IFeatureSettings
     public int SurvivalCredits { get; set; }
     /// <summary>Changing this name lets every player claim the kit once more (for example after a wipe).</summary>
     public string SurvivalSeason { get; set; } = "1";
+    /// <summary>CB:reset: the player starts again from zero (new character). Free resets during the first hours, then one every N hours.</summary>
+    public bool ResetEnabled { get; set; }
+    public int ResetFreeCount { get; set; } = 3;
+    public int ResetFreeHours { get; set; } = 10;
+    public int ResetEveryHours { get; set; } = 6;
 
     public List<string> AlertWords { get; set; } = ["admin", "help", "aide", "bug", "cheat"];
 
@@ -243,6 +262,11 @@ public sealed class CheatRule
 
 public sealed class SecuritySettings : IFeatureSettings
 {
+    /// <summary>Inventory history: a copy of every online player's inventory when it changes, and at death (to give it back).</summary>
+    public bool InventoryHistoryEnabled { get; set; } = true;
+    public int InventoryMinutes { get; set; } = 2;
+    public int InventoryDays { get; set; } = 14;
+
     public bool AntiCheatEnabled { get; set; }
     public int ScanMinutes { get; set; } = 5;
     public List<CheatRule> CheatRules { get; set; } = [];
@@ -290,7 +314,7 @@ public sealed class SecuritySettings : IFeatureSettings
         FeatureStore.Need(PoleLimit is >= 100 and <= 100000 && PoleAlertSeconds is >= 10 && PoleMoveSeconds > PoleAlertSeconds, "invalid_poles");
         FeatureStore.Need(EmergencyFailures is >= 2 and <= 20 && EmergencyWindowMinutes is >= 5 and <= 24 * 60, "invalid_emergency");
         FeatureStore.Need(FloodText.Trim().Length >= 5 && FloodPerMinute is >= 5 and <= 100000, "invalid_flood");
-        FeatureStore.Need(PositionSeconds is >= 15 and <= 600, "invalid_value");
+        FeatureStore.Need(PositionSeconds is >= 15 and <= 600 && InventoryMinutes is >= 1 and <= 60 && InventoryDays is >= 1 and <= 365, "invalid_value");
         FeatureStore.Need(Regex.IsMatch(AutoBanDuration, "^[0-9]{1,4}[mhdy]$"), "invalid_duration");
     }
 }

@@ -129,6 +129,10 @@ async function renderJournal(el, s, me) {
       { k: "autoBanExtreme", type: "check", label: t("se_autoban") },
       { k: "autoBanDuration", type: "text", label: t("se_ban_dur"), hint: t("ban_hint") },
       { k: "exemptAdmins", type: "check", label: t("se_exempt") }] },
+    { title: t("ih_title"), hint: t("ih_settings_hint"), open: false, fields: [
+      { k: "inventoryHistoryEnabled", type: "check", label: t("ih_on") },
+      { k: "inventoryMinutes", type: "number", label: t("ih_minutes") },
+      { k: "inventoryDays", type: "number", label: t("ih_days") }] },
     { title: t("se_attacks"), open: false, fields: [
       { k: "attackLogEnabled", type: "check", label: t("se_att_on") },
       { k: "attackRadius", type: "number", label: t("se_radius") },

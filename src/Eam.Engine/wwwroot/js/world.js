@@ -295,7 +295,10 @@ async function rulesView(el, s, me, back) {
         { k: "maxCount", label: t("rules_max_count"), type: "number" },
         { k: "maxClass", label: t("rules_max_class"), type: "number" },
         { k: "maxBlocks", label: t("rules_max_blocks"), type: "number" }] },
-      { k: "limitAction", type: "select", label: t("rules_action"), options: [["warn", t("act_warn")], ["destroy", t("act_destroy")]] },
+      { k: "limitAction", type: "select", label: t("rules_action"), options: [["warn", t("act_warn")], ["destroy", t("act_destroy")], ["sanction", t("act_sanction")]] },
+      { k: "sanctionFaction", type: "text", label: t("rules_sanction_faction"), hint: t("rules_sanction_hint") },
+      { k: "sanctionDestroyHours", type: "number", label: t("rules_sanction_hours") },
+      { k: "totalMaxStructures", type: "number", label: t("rules_total_max") },
       { k: "limitGraceHours", type: "number", label: t("rules_grace") },
       { k: "exemptAdmins", type: "check", label: t("rules_exempt_admins") },
       { k: "exemptFactions", type: "ints", label: t("rules_exempt_factions") }] },
@@ -305,7 +308,10 @@ async function rulesView(el, s, me, back) {
         { k: "type", label: t("st_type"), type: "select", options: typeOpts },
         { k: "playfields", label: t("rules_pf"), type: "text" },
         { k: "notVisitedDays", label: t("rules_not_visited"), type: "number" },
-        { k: "olderThanHours", label: t("rules_older"), type: "number" }] }] },
+        { k: "olderThanHours", label: t("rules_older"), type: "number" },
+        { k: "onPlayfieldHours", label: t("rules_on_pf"), type: "number" }] },
+      { k: "untouchedPublicHours", type: "number", label: t("rules_public_hours"), hint: t("rules_public_hint") },
+      { k: "publicFaction", type: "text", label: t("rules_public_faction") }] },
     { title: t("rules_reserved"), hint: t("rules_reserved_hint"), fields: [
       { k: "reservedEnabled", type: "check", label: t("rules_reserved_on") },
       { k: "reserved", type: "rows", label: t("rules_reserved_list"), cols: [

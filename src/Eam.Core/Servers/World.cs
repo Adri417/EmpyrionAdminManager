@@ -190,7 +190,7 @@ public static class LimitChecker
 
     /// <summary>Structures matching an automatic wipe rule.</summary>
     public static IReadOnlyList<(StructureRow Structure, string Reason)> AutoWipe(IReadOnlyList<StructureRow> structures, IEnumerable<AutoWipeRule> rules,
-        DateTime nowUtc, Func<int, int, bool> exempt)
+        DateTime nowUtc, Func<int, int, bool> exempt, Func<int, DateTime>? arrivedUtc = null)
     {
         var result = new List<(StructureRow, string)>();
         foreach (var s in structures)
@@ -205,6 +205,8 @@ public static class LimitChecker
                 { result.Add((s, $"not visited for {(int)(nowUtc - lv).TotalDays} days")); break; }
                 if (r.OlderThanHours > 0 && nowUtc - s.FirstSeenUtc > TimeSpan.FromHours(r.OlderThanHours))
                 { result.Add((s, $"older than {r.OlderThanHours} h")); break; }
+                if (r.OnPlayfieldHours > 0 && nowUtc - (arrivedUtc?.Invoke(s.Id) ?? s.FirstSeenUtc) > TimeSpan.FromHours(r.OnPlayfieldHours))
+                { result.Add((s, $"on {s.Playfield} for more than {r.OnPlayfieldHours} h")); break; }
             }
         }
         return result;

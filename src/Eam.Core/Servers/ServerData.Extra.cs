@@ -378,6 +378,7 @@ public sealed partial class ServerData
             DELETE FROM structures; DELETE FROM structure_events; DELETE FROM positions; DELETE FROM journal;
             DELETE FROM counters; DELETE FROM miners; DELETE FROM game_event_players; DELETE FROM game_events;
             DELETE FROM player_events; DELETE FROM offline_messages; DELETE FROM players;
+            DELETE FROM inventory_snapshots; DELETE FROM player_meta; DELETE FROM saved_positions;
             {(keepChat ? "" : "DELETE FROM chat;")}
             """);
     }

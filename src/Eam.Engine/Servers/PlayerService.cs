@@ -7,7 +7,10 @@ namespace Eam.Engine.Servers;
 public sealed record PlayerActionRequest(
     string Action, string? Text, double? Amount, int? ItemId, int? Count, int? Exp, int? Upgrade,
     string? Playfield, double? X, double? Y, double? Z, string? Duration, int? Permission, string? Reason,
-    List<StackDto>? Toolbelt, List<StackDto>? Bag);
+    List<StackDto>? Toolbelt, List<StackDto>? Bag,
+    long? SnapshotId = null, string? Name = null, bool? Replace = null, int? Origin = null, int? FactionGroup = null, int? FactionId = null,
+    int? FactionRole = null, string? StartPlayfield = null, string? Note = null, bool? Marked = null, bool? BanExempt = null, bool? On = null,
+    string? Target = null, int? StructureId = null, List<StackDto>? Items = null);
 
 public sealed record StackDto(int Id, int Count, int Slot, int Ammo, int Decay);
 
@@ -37,12 +40,15 @@ public sealed class PlayerService
         Dictionary<string, LivePlayer> online;
         lock (l.Gate) online = l.Players.Values.Where(p => p.SteamId is { Length: > 0 }).GroupBy(p => p.SteamId!).ToDictionary(g => g.Key, g => g.First());
         var roles = AdminConfig.ReadElevated(AdminConfig.FileOf(def)).ToDictionary(e => e.SteamId, e => e.Permission);
+        var metas = data.Metas().ToDictionary(m => m.SteamId);
         return data.Players().Select(p => new
         {
             p.SteamId, p.EntityId, p.Name, p.FirstSeenUtc, p.LastSeenUtc, p.PlaytimeSeconds,
             online = online.ContainsKey(p.SteamId),
             playfield = online.TryGetValue(p.SteamId, out var o) ? o.Playfield : null,
             role = roles.TryGetValue(p.SteamId, out var r) ? AdminConfig.RoleName(r) : "player",
+            marked = metas.TryGetValue(p.SteamId, out var m) && m.Marked,
+            god = m?.God == true,
         }).OrderByDescending(p => p.online).ThenByDescending(p => p.LastSeenUtc).ToList();
     }
 
@@ -72,6 +78,11 @@ public sealed class PlayerService
             pendingMessages = data.PendingOfflineMessages(steamId),
             events = data.PlayerEvents(steamId, 300),
             chat = data.PlayerChat(steamId, 200),
+            meta = data.Meta(steamId),
+            journal = data.Journal(null, 0, 200, null, steamId),
+            inventories = data.InventorySnapshots(steamId, 50).Select(x => new { x.Id, x.Utc, x.Reason, x.Playfield, items = CountItems(x.Toolbelt) + CountItems(x.Bag) }),
+            saves = PlayerSaves(id, steamId),
+            survivalClaimed = data.Counter(steamId, "cb_survival") is not null,
         };
     }
 
@@ -229,12 +240,257 @@ public sealed class PlayerService
                 result = new { appliesOnRestart = true };
                 break;
             }
+            // ---- version 0.9.5
+            case "god":
+            {
+                Need("gamemaster");
+                var m = data.Meta(steamId);
+                data.SaveMeta(m with { God = r.On ?? !m.God });
+                detail = (r.On ?? !m.God) ? "on" : "off";
+                break;
+            }
+            case "meta":
+            {
+                Need("moderator");
+                var m = data.Meta(steamId);
+                data.SaveMeta(m with { Note = r.Note ?? m.Note, Marked = r.Marked ?? m.Marked, BanExempt = r.BanExempt ?? m.BanExempt });
+                detail = $"note/marked {r.Marked?.ToString() ?? "="} / ban exempt {r.BanExempt?.ToString() ?? "="}";
+                break;
+            }
+            case "survival_reset":
+                Need("gamemaster");
+                data.DeleteCounter(steamId, "cb_survival");
+                data.DeleteCounter(steamId, "cb_heal");
+                detail = "";
+                break;
+            case "playtime_reset":
+                Need("admin");
+                data.ResetPlaytime(steamId);
+                detail = "";
+                break;
+            case "player_set":
+            {
+                Need("admin");
+                var req = new Dictionary<string, object?> { ["op"] = "player_set", ["id"] = Entity() };
+                if (r.Origin is { } o) req["origin"] = o;
+                if (r.FactionGroup is { } fg) req["factionGroup"] = fg;
+                if (r.FactionId is { } fi) req["factionId"] = fi;
+                if (r.FactionRole is { } fr) req["factionRole"] = fr;
+                if (!string.IsNullOrWhiteSpace(r.StartPlayfield)) req["startPlayfield"] = r.StartPlayfield.Trim();
+                if (req.Count == 2) throw new ServerException("invalid_value");
+                await _live.RequestAsync(id, req);
+                detail = string.Join(", ", req.Where(k => k.Key is not ("op" or "id")).Select(k => $"{k.Key}={k.Value}"));
+                break;
+            }
+            case "bp_resources":
+            {
+                Need("gamemaster");
+                var items = (r.Items ?? []).Where(x => x.Id > 0 && x.Count > 0).Select(x => new Dictionary<string, object?> { ["id"] = x.Id, ["count"] = x.Count }).ToList();
+                if (items.Count == 0) throw new ServerException("invalid_item");
+                await _live.RequestAsync(id, new() { ["op"] = "bp_resources", ["id"] = Entity(), ["items"] = items, ["replace"] = r.Replace == true ? 1 : 0 });
+                detail = string.Join(", ", items.Select(i => $"{i["count"]} × {i["id"]}")) + (r.Replace == true ? " (replace)" : "");
+                break;
+            }
+            case "inventory_restore":
+            case "inventory_template_load":
+            {
+                Need("admin");
+                string toolbelt, bag;
+                if (r.Action == "inventory_restore")
+                {
+                    var snap = data.InventorySnapshotById(r.SnapshotId ?? 0) ?? throw new ServerException("not_found");
+                    if (snap.SteamId != steamId) throw new ServerException("not_found");
+                    (toolbelt, bag) = (snap.Toolbelt, snap.Bag);
+                    detail = $"copy #{snap.Id} of {snap.Utc:yyyy-MM-dd HH:mm} ({snap.Reason})";
+                }
+                else
+                {
+                    var tpl = data.InventoryTemplates().FirstOrDefault(t => t.Name == r.Name) ?? throw new ServerException("not_found");
+                    (toolbelt, bag) = (tpl.Toolbelt, tpl.Bag);
+                    detail = "template " + tpl.Name;
+                }
+                if (online is null) throw new ServerException("player_offline");
+                await SaveCurrentAsync(def, online, "before_restore");
+                if (r.Replace == false)
+                {
+                    // "Give the items": added to what the player has now (anything that does not fit drops in an "items" box).
+                    foreach (var st in JsonDocument.Parse(toolbelt).RootElement.EnumerateArray().Concat(JsonDocument.Parse(bag).RootElement.EnumerateArray()))
+                        await _live.RequestAsync(id, new() { ["op"] = "item_add", ["id"] = Entity(), ["item"] = st.GetProperty("id").GetInt32(), ["count"] = st.GetProperty("count").GetInt32() });
+                    detail += " (added)";
+                }
+                else
+                    await _live.RequestAsync(id, new() { ["op"] = "inventory_set", ["id"] = Entity(), ["toolbelt"] = JsonDocument.Parse(toolbelt).RootElement, ["bag"] = JsonDocument.Parse(bag).RootElement });
+                break;
+            }
+            case "inventory_snapshot":
+            {
+                Need("gamemaster");
+                if (online is null) throw new ServerException("player_offline");
+                var newId = await SaveCurrentAsync(def, online, "manual");
+                detail = "#" + newId;
+                result = new { id = newId };
+                break;
+            }
+            case "inventory_keep":
+                Need("admin");
+                data.KeepInventorySnapshot(r.SnapshotId ?? 0, r.On ?? true);
+                detail = "#" + r.SnapshotId;
+                break;
+            case "inventory_template_save":
+            {
+                Need("admin");
+                var name = (r.Name ?? "").Trim();
+                if (name.Length is 0 or > 40) throw new ServerException("invalid_name");
+                var info = await _live.RequestAsync(id, new() { ["op"] = "player", ["id"] = Entity(), ["full"] = true });
+                data.SaveInventoryTemplate(name, Raw(info, "toolbelt"), Raw(info, "bag"));
+                detail = name;
+                break;
+            }
+            case "teleport_position":
+            {
+                Need("gamemaster");
+                var pos = data.SavedPositions().FirstOrDefault(p => p.Name == r.Name) ?? throw new ServerException("not_found");
+                await TeleportAsync(id, online, pos.Playfield, pos.X, pos.Y, pos.Z);
+                detail = $"{pos.Name}: {pos.Playfield} ({pos.X:0}, {pos.Y:0}, {pos.Z:0})";
+                break;
+            }
+            case "teleport_to_player":
+            {
+                Need("gamemaster");
+                var target = _live.OnlineBySteam(id, r.Target ?? "") ?? throw new ServerException("player_offline");
+                await TeleportAsync(id, online, target.Playfield, target.X, target.Y + 2, target.Z);
+                detail = "→ " + target.Name;
+                break;
+            }
+            case "teleport_to_structure":
+            {
+                Need("gamemaster");
+                var st = data.Structure(r.StructureId ?? 0) ?? throw new ServerException("not_found");
+                await TeleportAsync(id, online, st.Playfield, st.X, st.Y + 10, st.Z);
+                detail = $"→ {st.Name} ({st.Id})";
+                break;
+            }
+            case "save_file":
+            {
+                Need("admin");
+                var src = PlayerFile(def, steamId);
+                if (!File.Exists(src)) throw new ServerException("not_found");
+                var dir = Path.Combine(def.EamDir, "player-saves", steamId);
+                Directory.CreateDirectory(dir);
+                var name = $"{DateTime.Now:yyyyMMdd-HHmmss}.ply";
+                File.Copy(src, Path.Combine(dir, name));
+                detail = name;
+                result = new { file = name };
+                break;
+            }
+            case "load_file":
+            case "reset":
+            {
+                Need("admin");
+                if (online is not null) throw new ServerException("player_must_be_offline");
+                var dst = PlayerFile(def, steamId);
+                var aside = Path.Combine(def.EamDir, "players-removed", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+                if (File.Exists(dst)) { Directory.CreateDirectory(aside); File.Move(dst, Path.Combine(aside, Path.GetFileName(dst))); }
+                if (r.Action == "load_file")
+                {
+                    var name = Path.GetFileName(r.Name ?? "");
+                    var src = Path.Combine(def.EamDir, "player-saves", steamId, name);
+                    if (name.Length == 0 || !File.Exists(src)) throw new ServerException("not_found");
+                    File.Copy(src, dst);
+                    detail = name;
+                }
+                else detail = "player file moved to " + aside;
+                break;
+            }
+            case "impersonate":
+            case "impersonate_end":
+            {
+                Need("admin");
+                var me = _live.OnlineBySteam(id, r.Target ?? "") ?? throw new ServerException("admin_not_in_game");
+                if (r.Action == "impersonate")
+                {
+                    if (online is null) throw new ServerException("player_offline");
+                    var mine = await _live.RequestAsync(id, new() { ["op"] = "player", ["id"] = me.Id, ["full"] = true });
+                    data.AddInventorySnapshot(me.SteamId!, me.Name, "before_impersonate", me.Playfield, Raw(mine, "toolbelt"), Raw(mine, "bag"), DateTime.UtcNow);
+                    data.SetCounter(me.SteamId!, "impersonate", 1, JsonSerializer.Serialize(new { pf = me.Playfield, me.X, me.Y, me.Z, fg = LiveService.Int(mine, "factionGroup"), fid = LiveService.Int(mine, "factionId") }));
+                    var his = await _live.RequestAsync(id, new() { ["op"] = "player", ["id"] = online.Id, ["full"] = true });
+                    await _live.RequestAsync(id, new() { ["op"] = "inventory_set", ["id"] = me.Id, ["toolbelt"] = his.GetProperty("toolbelt"), ["bag"] = his.GetProperty("bag") });
+                    await _live.RequestAsync(id, new() { ["op"] = "player_set", ["id"] = me.Id, ["factionGroup"] = LiveService.Int(his, "factionGroup"), ["factionId"] = LiveService.Int(his, "factionId") });
+                    await TeleportAsync(id, me, online.Playfield, online.X, online.Y + 2, online.Z);
+                    detail = $"{me.Name} takes the place of {online.Name}";
+                }
+                else
+                {
+                    var back = data.InventorySnapshots(me.SteamId, 1, "before_impersonate").FirstOrDefault() ?? throw new ServerException("not_found");
+                    await _live.RequestAsync(id, new() { ["op"] = "inventory_set", ["id"] = me.Id, ["toolbelt"] = JsonDocument.Parse(back.Toolbelt).RootElement, ["bag"] = JsonDocument.Parse(back.Bag).RootElement });
+                    if (data.Counter(me.SteamId!, "impersonate")?.Value is { } v)
+                    {
+                        var o = JsonDocument.Parse(v).RootElement;
+                        await _live.RequestAsync(id, new() { ["op"] = "player_set", ["id"] = me.Id, ["factionGroup"] = LiveService.Int(o, "fg"), ["factionId"] = LiveService.Int(o, "fid") });
+                        await TeleportAsync(id, me, LiveService.Str(o, "pf"), LiveService.Num(o, "X"), LiveService.Num(o, "Y"), LiveService.Num(o, "Z"));
+                        data.DeleteCounter(me.SteamId!, "impersonate");
+                    }
+                    detail = $"{me.Name} back to themself";
+                }
+                break;
+            }
             default:
                 throw new ServerException("unknown_action");
         }
         data.PlayerEvent(steamId, seen.Name, "admin_" + r.Action, detail, by);
         ServerManager.ServerLog(def, $"{by}: {r.Action} on {seen.Name} ({steamId}) {detail}");
         return result;
+    }
+
+    private static int CountItems(string json) { try { return JsonDocument.Parse(json).RootElement.GetArrayLength(); } catch { return 0; } }
+
+    private static string Raw(JsonElement e, string key) => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Array ? v.GetRawText() : "[]";
+
+    public static string PlayerFile(ServerDefinition def, string steamId) =>
+        Path.Combine(def.GameDir, "Saves", "Games", WorldService.SaveName(def), "Players", steamId + ".ply");
+
+    private async Task<long> SaveCurrentAsync(ServerDefinition def, LivePlayer? p, string reason)
+    {
+        if (p?.SteamId is null) throw new ServerException("player_offline");
+        var info = await _live.RequestAsync(def.Id, new() { ["op"] = "player", ["id"] = p.Id, ["full"] = true });
+        return _live.Data(def).AddInventorySnapshot(p.SteamId, p.Name, reason, p.Playfield, Raw(info, "toolbelt"), Raw(info, "bag"), DateTime.UtcNow);
+    }
+
+    private async Task TeleportAsync(long id, LivePlayer? p, string? pf, double x, double y, double z)
+    {
+        if (p is null) throw new ServerException("player_offline");
+        var req = new Dictionary<string, object?> { ["op"] = "teleport", ["id"] = p.Id, ["x"] = x, ["y"] = y, ["z"] = z };
+        if (!string.IsNullOrEmpty(pf) && !string.Equals(pf, p.Playfield, StringComparison.OrdinalIgnoreCase)) req["pf"] = pf;
+        await _live.RequestAsync(id, req, TimeSpan.FromSeconds(60));
+    }
+
+    /// <summary>Kicks every online player (before a maintenance).</summary>
+    public async Task<int> KickAllAsync(long id, string reason, string by)
+    {
+        var n = 0;
+        reason = Clean(string.IsNullOrWhiteSpace(reason) ? "Server maintenance" : reason, 120).Replace("'", "’");
+        foreach (var p in _live.OnlinePlayers(id))
+        {
+            try { await _manager.ConsoleAsync(id, $"kick {p.Id} '{reason}'", by); n++; } catch (ServerException) { }
+        }
+        ServerManager.ServerLog(_manager.Definition(id), $"{by}: kicked all players ({n})");
+        return n;
+    }
+
+    public object Inventories(long id, string? steamId, string? reason)
+    {
+        var data = _live.Data(_manager.Definition(id));
+        return data.InventorySnapshots(string.IsNullOrEmpty(steamId) ? null : steamId, 300, string.IsNullOrEmpty(reason) ? null : reason).Select(s => new
+        {
+            s.Id, s.SteamId, s.Name, s.Utc, s.Reason, s.Playfield,
+            toolbelt = JsonDocument.Parse(s.Toolbelt).RootElement, bag = JsonDocument.Parse(s.Bag).RootElement,
+        });
+    }
+
+    public object PlayerSaves(long id, string steamId)
+    {
+        var dir = Path.Combine(_manager.Definition(id).EamDir, "player-saves", steamId);
+        return Directory.Exists(dir) ? new DirectoryInfo(dir).EnumerateFiles("*.ply").OrderByDescending(f => f.Name).Select(f => new { file = f.Name, size = f.Length }).ToList() : [];
     }
 
     private static string Clean(string? text, int max)

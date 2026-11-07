@@ -13,7 +13,7 @@ namespace Eam.Mod
     /// </summary>
     public sealed class EamMod : ModInterface
     {
-        public const string ModVersion = "0.9.0";
+        public const string ModVersion = "0.9.5";
 
         private ModGameAPI _api;
         private LinkServer _link;
@@ -116,6 +116,10 @@ namespace Eam.Mod
                     set.radiation = OptInt(r, "radiation");
                     set.bodyTemp = OptInt(r, "bodyTemp");
                     if (r.OptNum("bpTime") is double bp) set.bpRemainingTime = (float)bp;
+                    set.origin = OptInt(r, "origin");
+                    if (OptInt(r, "factionGroup") is int fg) set.factionGroup = (byte)fg;
+                    set.factionId = OptInt(r, "factionId");
+                    if (OptInt(r, "factionRole") is int fr) set.factionRole = (byte)fr;
                     var sp = r.Str("startPlayfield");
                     if (!string.IsNullOrEmpty(sp)) set.startPlayfield = sp;
                     Request(CmdId.Request_Player_SetPlayerInfo, set, rid);
@@ -131,6 +135,9 @@ namespace Eam.Mod
                     break;
                 }
                 case "bp_finish": Request(CmdId.Request_Blueprint_Finish, new Id(id), rid); break;
+                case "bp_resources":
+                    Request(CmdId.Request_Blueprint_Resources, new BlueprintResources(id, new List<ItemStack>(Stacks(r.List("items"))), r.Num("replace") > 0), rid);
+                    break;
                 case "banned": Request(CmdId.Request_GetBannedPlayers, null, rid); break;
 
                 // ---- step 6: structures and playfields
