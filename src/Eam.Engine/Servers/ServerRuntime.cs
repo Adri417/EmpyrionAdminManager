@@ -22,4 +22,6 @@ public sealed class ServerRuntime
     public bool AutoRestartSuspended { get; set; }
     public SemaphoreSlim Lock { get; } = new(1, 1);
     public CancellationTokenSource? StopCountdown { get; set; }
+    /// <summary>Last stop or forced stop asked by an admin: processes still closing are not a restart nor a crash.</summary>
+    public DateTime? ManualStopUtc { get; set; }
 }

@@ -2,7 +2,8 @@
   <!-- EAM game mod: loaded by the Empyrion dedicated server (Unity Mono, .NET Framework 4.x). -->
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <AssemblyName>EamMod</AssemblyName>
+    <!-- Empyrion loads Content\Mods\<Folder>\<Folder>.dll: the DLL must be named like its folder. -->
+    <AssemblyName>EAM</AssemblyName>
     <RootNamespace>Eam.Mod</RootNamespace>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>

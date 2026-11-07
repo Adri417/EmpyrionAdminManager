@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 (2026-11-07) - Corrections
+- Le mod EAM ne se chargeait pas : le jeu attend Content\Mods\EAM\EAM.dll (même nom que le dossier). Le DLL s'appelle maintenant EAM.dll ; l'ancien EamMod.dll est retiré automatiquement.
+- « Forcer l'arrêt » ou « Arrêter » n'est plus pris pour un plantage suivi d'un redémarrage automatique quand des processus du jeu mettent du temps à se fermer.
+
 ## 0.3.0 (2026-11-07) - Mod EAM et vue en direct / EAM mod and live view
 - Mod EAM écrit à neuf, installé et mis à jour automatiquement dans chaque serveur à chaque démarrage (Content\Mods\EAM).
 - Lien local uniquement (127.0.0.1), une clé secrète différente par serveur, aucun port ouvert sur Internet.
