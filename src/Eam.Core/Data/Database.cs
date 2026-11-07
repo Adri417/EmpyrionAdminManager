@@ -18,6 +18,7 @@ public sealed class Database
     public Database(string file, string[] migrations, bool pooling = true)
     {
         _migrations = migrations;
+        _gateKey = Path.GetFullPath(file);
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = file,
@@ -27,15 +28,52 @@ public sealed class Database
         }.ToString();
     }
 
+    /// <summary>
+    /// Opens a connection. Inside EAM, one connection at a time works on a given database file:
+    /// the others wait their turn (in order) instead of fighting for SQLite's lock. On a slow
+    /// Windows disk with many threads, that fight could end in "database is locked" and a lost write.
+    /// The wait is limited, so two files opened in opposite orders can never block each other forever.
+    /// </summary>
     public SqliteConnection Open()
     {
-        var c = new SqliteConnection(_connectionString);
-        c.Open();
-        using var cmd = c.CreateCommand();
-        // WAL + full sync on commit: survives a crash or power cut without corruption.
-        cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;";
-        cmd.ExecuteNonQuery();
-        return c;
+        var c = new GatedConnection(_connectionString, Gates.GetOrAdd(_gateKey, _ => new object()));
+        try
+        {
+            c.Open();
+            using var cmd = c.CreateCommand();
+            // WAL + full sync on commit: survives a crash or power cut without corruption.
+            // busy_timeout: another program (a database viewer, a backup) holding the file for a moment.
+            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=30000;";
+            cmd.ExecuteNonQuery();
+            return c;
+        }
+        catch { c.Dispose(); throw; }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> Gates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly string _gateKey;
+
+    private sealed class GatedConnection : SqliteConnection
+    {
+        private readonly object _gate;
+        private bool _held;
+
+        public GatedConnection(string cs, object gate) : base(cs)
+        {
+            _gate = gate;
+            // Re-entrant: the same thread may open the same database twice (nested calls).
+            _held = Monitor.TryEnter(_gate, TimeSpan.FromSeconds(60));
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            try { base.Dispose(disposing); }
+            finally
+            {
+                if (_held && Monitor.IsEntered(_gate)) Monitor.Exit(_gate);
+                _held = false;
+            }
+        }
     }
 
     /// <summary>Ordered list of schema changes. Never edit a released entry: append a new one.</summary>
