@@ -115,41 +115,64 @@ export function renderLive(el, s) {
 // ---------------------------------------------------------------- chat
 function line(m) {
   const time = new Date(m.utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return html`<div class="chat-line ${m.source === "eam" ? "from-eam" : ""}">
+  return html`<div class="chat-line ch-${m.channel} ${m.source === "eam" ? "from-eam" : ""}">
     <span class="chat-time">${time}</span><span class="badge">${t("ch_" + m.channel) === "ch_" + m.channel ? m.channel : t("ch_" + m.channel)}</span>
     <b>${m.senderName}</b> <span class="chat-text">${m.text}</span>
     <button type="button" class="btn small tr" data-tr="${m.id}" title="${t("translate")}">🌐</button></div>`;
 }
 
+const CHANNELS = ["Global", "Faction", "Alliance", "SinglePlayer", "Server"];
+
 export async function renderChat(el, s, me) {
   const canSend = atLeast(me.role, "moderator");
+  const online = live.snapshots[s.id]?.players || [];
+  let search = "", channel = "", auto = true;
   mount(el, html`<div class="card">
+    <div class="chat-tools">
+      <input type="search" id="chat-q" placeholder="${t("chat_search")}">
+      <select id="chat-ch"><option value="">${t("chat_all_channels")}</option>${CHANNELS.map((c) => html`<option value="${c}">${t("ch_" + c)}</option>`)}</select>
+      <label class="check"><input type="checkbox" id="chat-auto" checked> ${t("chat_autoscroll")}</label>
+    </div>
     <div id="chat-more-wrap"></div>
     <div class="chat" id="chat-list"></div>
     ${canSend ? html`<form class="console-form" id="chat-form">
         <input name="text" type="text" maxlength="300" autocomplete="off" placeholder="${t("chat_placeholder")}">
-        <select name="mode"><option value="chat">${t("chat_mode_chat")}</option><option value="popup">${t("chat_mode_popup")}</option></select>
+        <select name="mode"><option value="chat">${t("chat_mode_chat")}</option><option value="popup">${t("chat_mode_popup")}</option>
+          ${online.length ? html`<option value="private">${t("chat_mode_private")}</option>` : ""}</select>
+        <select name="player" hidden>${online.map((p) => html`<option value="${p.id}">${p.name}</option>`)}</select>
         <button class="btn primary">${t("send")}</button></form>`
       : html`<div class="hint">${t("chat_readonly")}</div>`}</div>`);
   const list = $("#chat-list", el);
+  const shown = () => (live.chat[s.id] || []).filter((m) => !channel || m.channel === channel);
   const draw = (keepScroll) => {
-    const msgs = live.chat[s.id] || [];
+    const all = live.chat[s.id] || [];
+    const msgs = shown();
     const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
-    mount(list, msgs.length ? html`${msgs.map(line)}` : html`<div class="hint">${t("chat_empty")}</div>`);
-    if (!keepScroll || atBottom) list.scrollTop = list.scrollHeight;
-    mount($("#chat-more-wrap", el), msgs.length >= 100 ? html`<button class="btn" id="chat-more">${t("chat_older")}</button>` : html``);
+    mount(list, msgs.length ? html`${msgs.map(line)}` : html`<div class="hint">${t(search ? "chat_no_match" : "chat_empty")}</div>`);
+    if (auto && (!keepScroll || atBottom)) list.scrollTop = list.scrollHeight;
+    mount($("#chat-more-wrap", el), all.length >= 100 ? html`<button class="btn" id="chat-more">${t("chat_older")}</button>` : html``);
     $("#chat-more", el)?.addEventListener("click", async () => {
       try {
-        const older = await api.get(`/api/servers/${s.id}/chat?before=${msgs[0].id}&limit=100`);
-        live.chat[s.id] = [...older, ...msgs];
+        const older = await api.get(`/api/servers/${s.id}/chat?before=${all[0].id}&limit=100${search ? `&q=${encodeURIComponent(search)}` : ""}`);
+        live.chat[s.id] = [...older, ...all];
         const h = list.scrollHeight;
         draw(true);
         list.scrollTop = list.scrollHeight - h;
       } catch (ex) { toast(errorText(ex.code), true); }
     });
   };
-  try { live.chat[s.id] = await api.get(`/api/servers/${s.id}/chat?limit=100`); } catch { live.chat[s.id] = []; }
-  draw(false);
+  const load = async () => {
+    try { live.chat[s.id] = await api.get(`/api/servers/${s.id}/chat?limit=100${search ? `&q=${encodeURIComponent(search)}` : ""}`); } catch { live.chat[s.id] = []; }
+    draw(false);
+  };
+  await load();
+  let qTimer;
+  $("#chat-q", el).addEventListener("input", (e) => {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => { search = e.target.value.trim(); load(); }, 350);
+  });
+  $("#chat-ch", el).addEventListener("change", (e) => { channel = e.target.value; draw(false); });
+  $("#chat-auto", el).addEventListener("change", (e) => { auto = e.target.checked; if (auto) list.scrollTop = list.scrollHeight; });
   list.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-tr]");
     if (!b) return;
@@ -165,15 +188,20 @@ export async function renderChat(el, s, me) {
       b.remove();
     } catch (ex) { toast(errorText(ex.code), true); b.disabled = false; }
   });
-  live.chatListener = (id) => { if (id === s.id && list.isConnected) draw(true); };
-  $("#chat-form", el)?.addEventListener("submit", async (e) => {
+  // New messages arriving while a search is active are not shown (the list is a search result).
+  live.chatListener = (id) => { if (id === s.id && list.isConnected && !search) draw(true); };
+  const form = $("#chat-form", el);
+  form?.mode.addEventListener("change", () => { form.player.hidden = form.mode.value !== "private"; });
+  form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target;
     const text = f.text.value.trim();
     if (!text) return;
     f.querySelector("button").disabled = true;
     try {
-      await api.post(`/api/servers/${s.id}/chat`, { text, mode: f.mode.value });
+      const body = { text, mode: f.mode.value };
+      if (f.mode.value === "private") body.playerId = Number(f.player.value);
+      await api.post(`/api/servers/${s.id}/chat`, body);
       f.text.value = "";
       if (f.mode.value === "popup") toast(t("saved"));
     } catch (ex) { toast(errorText(ex.code), true); }

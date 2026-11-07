@@ -3,6 +3,8 @@ using Eam.Engine.Servers;
 
 namespace Eam.Engine.Api;
 
+public sealed record BanSteamRequest(string SteamId, string? Duration, bool Unban, string? Reason);
+
 public sealed record BackupCreateRequest(string? Note, string? Kind = null);
 public sealed record BackupPartRequest(string Name, List<int>? Structures, string? SteamId, bool Keep = false);
 public sealed record BackupRestoreRequest(string Name, bool RestoreConfig, bool RestoreEamData);
@@ -87,6 +89,9 @@ public static class ServerToolsEndpoints
                     req = req with { Target = users.FindByName(By(c))?.SteamId ?? throw new ServerException("admin_steam_missing") };
                 return await p.ActAsync(id, steamId, req, By(c), RoleOf(c)) ?? Ok;
             })).RequireAuthorization(Roles.Moderator);
+        g.MapPost("/players/ban-steam", (long id, BanSteamRequest req, PlayerService p, HttpContext c) => RunAsync(async () => { await p.BanSteamAsync(id, req, By(c)); return Ok; }))
+            .RequireAuthorization(Roles.Moderator);
+        g.MapGet("/factions", (long id, PlayerService p) => Run(() => p.Factions(id))).RequireAuthorization(Roles.Moderator);
         g.MapPost("/players/kick-all", (long id, NameRequest req, PlayerService p, HttpContext c) => RunAsync(async () => new { kicked = await p.KickAllAsync(id, req.Name, By(c)) }))
             .RequireAuthorization(Roles.Moderator);
         g.MapGet("/inventories", (long id, string? steamId, string? reason, PlayerService p) => Run(() => p.Inventories(id, steamId, reason))).RequireAuthorization(Roles.GameMaster);

@@ -165,15 +165,19 @@ public sealed partial class ServerData
     }
 
     /// <summary>Latest messages, oldest first. <paramref name="beforeId"/> pages back in history.</summary>
-    public IReadOnlyList<ChatEntry> RecentChat(int limit, long? beforeId = null)
+    public IReadOnlyList<ChatEntry> RecentChat(int limit, long? beforeId = null, string? search = null)
     {
         using var c = _db.Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = """
             SELECT id, utc, channel, sender_id, sender_name, sender_steam, recipient_id, text, source FROM chat
-            WHERE ($b IS NULL OR id < $b) ORDER BY id DESC LIMIT $l;
+            WHERE ($b IS NULL OR id < $b)
+              AND ($q IS NULL OR text LIKE $q ESCAPE '\' OR sender_name LIKE $q ESCAPE '\')
+            ORDER BY id DESC LIMIT $l;
             """;
         cmd.Parameters.AddWithValue("$b", (object?)beforeId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$q", string.IsNullOrWhiteSpace(search) ? DBNull.Value
+            : "%" + search.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%");
         cmd.Parameters.AddWithValue("$l", Math.Clamp(limit, 1, 500));
         using var r = cmd.ExecuteReader();
         var list = new List<ChatEntry>();

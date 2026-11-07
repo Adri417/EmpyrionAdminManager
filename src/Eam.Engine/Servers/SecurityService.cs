@@ -50,10 +50,10 @@ public sealed class SecurityService : BackgroundService
                 try
                 {
                     var s = Settings(def);
-                    if (Due(_lastStats, def.Id, TimeSpan.FromMinutes(10))) RecordStats(def);
+                    if (Due(_lastStats, def.Id, TimeSpan.FromMinutes(10))) RecordStats(def, s.ExcludedPlayfields);
                     if (s.FloodEnabled) await WatchFloodAsync(def, s);
                     if (!_live.IsLinked(def.Id)) continue;
-                    if (Due(_lastPositions, def.Id, TimeSpan.FromSeconds(s.PositionSeconds))) RecordPositions(def);
+                    if (Due(_lastPositions, def.Id, TimeSpan.FromSeconds(s.PositionSeconds))) RecordPositions(def, s.ExcludedPlayfields);
                     if (s.AttackLogEnabled && Due(_lastAttackCheck, def.Id, TimeSpan.FromSeconds(30))) await CheckAttacksAsync(def, s);
                     if (s.PolesEnabled) await CheckPolesAsync(def, s);
                     if (s.AntiCheatEnabled && Due(_lastScan, def.Id, TimeSpan.FromMinutes(s.ScanMinutes))) await ScanAsync(def, s, "EAM");
@@ -73,7 +73,10 @@ public sealed class SecurityService : BackgroundService
 
     // ------------------------------------------------------------------ statistics and positions
 
-    private void RecordStats(ServerDefinition def)
+    private static bool Excluded(string patterns, string? playfield) =>
+        !string.IsNullOrWhiteSpace(patterns) && playfield is { Length: > 0 } && FeatureStore.MatchesPlayfield(patterns, playfield);
+
+    private void RecordStats(ServerDefinition def, string excluded)
     {
         var l = _live.Live(def.Id);
         var data = _live.Data(def);
@@ -82,15 +85,15 @@ public sealed class SecurityService : BackgroundService
         {
             data.AddStat(new StatRow(now, "server", Math.Round(l.CpuPercent, 1), Math.Round(l.MemoryBytes / 1048576.0), l.Players.Count, l.Playfields.Count,
                 l.DediFps ?? 0, l.Playfields.Values.Sum(p => p.Structures)));
-            foreach (var pf in l.Playfields.Values)
+            foreach (var pf in l.Playfields.Values.Where(p => !Excluded(excluded, p.Name)))
                 data.AddStat(new StatRow(now, "pf:" + pf.Name, 0, pf.MemoryMb, pf.Players, 1, pf.Fps, pf.Structures));
         }
     }
 
-    private void RecordPositions(ServerDefinition def)
+    private void RecordPositions(ServerDefinition def, string excluded)
     {
         var now = DateTime.UtcNow;
-        var rows = _live.OnlinePlayers(def.Id).Where(p => p.SteamId is { Length: > 0 } && p.Playfield is { Length: > 0 })
+        var rows = _live.OnlinePlayers(def.Id).Where(p => p.SteamId is { Length: > 0 } && p.Playfield is { Length: > 0 } && !Excluded(excluded, p.Playfield))
             .Select(p => new PositionRow(now, "p", p.SteamId!, p.Name, p.Playfield!, p.X, p.Y, p.Z)).ToList();
         if (rows.Count > 0) _live.Data(def).AddPositions(rows);
     }

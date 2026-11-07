@@ -274,6 +274,9 @@ public sealed class SecuritySettings : IFeatureSettings
     public int InventoryMinutes { get; set; } = 2;
     public int InventoryDays { get; set; } = 14;
 
+    /// <summary>Playfields left out of statistics and position history (instances, event arenas…), comma separated, * allowed.</summary>
+    public string ExcludedPlayfields { get; set; } = "";
+
     public bool AntiCheatEnabled { get; set; }
     public int ScanMinutes { get; set; } = 5;
     public List<CheatRule> CheatRules { get; set; } = [];

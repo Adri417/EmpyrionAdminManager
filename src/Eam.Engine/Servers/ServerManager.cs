@@ -65,6 +65,9 @@ public sealed class ServerManager : BackgroundService
         {
             id = s.Id, slug = s.Slug, name = s.Name, rootDir = s.RootDir, gamePort = s.GamePort, telnetPort = s.TelnetPort, modPort = s.ModPort,
             branch = s.Branch, autoStart = s.AutoStart, autoRestart = s.AutoRestart, installed = s.Installed, buildId = s.BuildId,
+            latestBuild = _steam.LatestBuilds.GetValueOrDefault(s.Branch),
+            gameUpdateAvailable = s.Installed && s.BuildId is { Length: > 0 } b0 && _steam.LatestBuilds.TryGetValue(s.Branch, out var lb) && lb != b0
+                && long.TryParse(lb, out var lbn) && long.TryParse(b0, out var b0n) && lbn > b0n,
             createdUtc = s.CreatedUtc,
             maxPlayers = int.TryParse(yamlValue("Srv_MaxPlayers"), out var mp) ? mp : (int?)null,
             description = yamlValue("Srv_Description"),

@@ -3,6 +3,12 @@ import { extend } from "./i18n.js";
 
 extend({
   fr: {
+    chat_search: "Rechercher dans le chat…", chat_all_channels: "Tous les canaux", chat_autoscroll: "Défilement auto", chat_mode_private: "Message privé", chat_no_match: "Aucun message trouvé.",
+    bs_title: "Bannir par SteamID", bs_duration: "Durée", bs_duration_hint: "Exemples : 30m, 12h, 7d, 1y.",
+    fa_title: "Factions", fa_abbrev: "Sigle", fa_online: "Membres en ligne", fa_none: "Aucune faction connue (le serveur doit tourner avec le mod EAM).",
+    pl_steam_profile: "Profil Steam", se_excluded_pf: "Playfields exclus des statistiques et positions (séparés par des virgules)",
+    gu_available: "Mise à jour du jeu disponible ({0})", gu_hint: "Steam a une version plus récente d'Empyrion. Utilisez « Mettre à jour » quand le serveur est arrêté.",
+    ov_warnings: "Dernières alertes (24 h)",
     pm_marked: "Joueur marqué", pm_kick_all: "Expulser tout le monde", pm_kicked: "{0} joueur(s) expulsé(s).", pm_count: "{0} connecté(s) sur {1}",
     pm_god_on: "Mode dieu : activer", pm_god_off: "Mode dieu : désactiver", pm_god: "Mode dieu",
     pm_tp_more: "Téléporter…", pm_tp_kind: "Vers", pm_tp_pos: "Une position enregistrée", pm_tp_player: "Un autre joueur", pm_tp_structure: "Une structure",
@@ -54,6 +60,12 @@ extend({
     err_scenario_delete_failed: "Le scénario n'a pas pu être supprimé.", err_server_running: "Arrêtez le serveur d'abord.", err_unknown_ore: "Minerai inconnu.",
   },
   en: {
+    chat_search: "Search the chat…", chat_all_channels: "All channels", chat_autoscroll: "Auto scroll", chat_mode_private: "Private message", chat_no_match: "No message found.",
+    bs_title: "Ban by SteamID", bs_duration: "Duration", bs_duration_hint: "Examples: 30m, 12h, 7d, 1y.",
+    fa_title: "Factions", fa_abbrev: "Tag", fa_online: "Members online", fa_none: "No faction known yet (the server must run with the EAM mod).",
+    pl_steam_profile: "Steam profile", se_excluded_pf: "Playfields excluded from statistics and positions (comma separated)",
+    gu_available: "Game update available ({0})", gu_hint: "Steam has a newer Empyrion version. Use \"Update\" while the server is stopped.",
+    ov_warnings: "Latest warnings (24 h)",
     pm_marked: "Marked player", pm_kick_all: "Kick everyone", pm_kicked: "{0} player(s) kicked.", pm_count: "{0} online out of {1}",
     pm_god_on: "God mode: on", pm_god_off: "God mode: off", pm_god: "God mode",
     pm_tp_more: "Teleport…", pm_tp_kind: "To", pm_tp_pos: "A saved position", pm_tp_player: "Another player", pm_tp_structure: "A structure",

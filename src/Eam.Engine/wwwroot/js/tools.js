@@ -227,13 +227,15 @@ async function renderPlayers(el, s, me) {
   mount(el, html`<div class="card">
     <div class="actions-row"><input id="pl-q" type="search" placeholder="${t("pl_search")}" autocomplete="off">
       <button class="btn" id="pl-banned">${t("pl_banned")}</button>
+      ${atLeast(me.role, "moderator") ? html`<button class="btn" id="pl-factions">${t("fa_title")}</button>` : ""}
       ${atLeast(me.role, "gamemaster") ? html`<button class="btn" id="pl-inv">${t("ih_all")}</button>` : ""}
       ${atLeast(me.role, "moderator") ? html`<button class="btn danger" id="pl-kickall">${t("pm_kick_all")}</button>` : ""}</div>
     <div class="hint" id="pl-count"></div>
     <div class="table-wrap"><table><thead><tr><th>${t("col_name")}</th><th>${t("pl_seen")}</th><th>${t("pl_role")}</th><th>${t("pl_playtime")}</th></tr></thead>
     <tbody id="pl-body"></tbody></table></div><div id="pl-empty"></div></div>`);
   $("#pl-q", el).addEventListener("input", (e) => { filter = e.target.value; draw(); });
-  $("#pl-banned", el).addEventListener("click", () => bannedDialog(s));
+  $("#pl-banned", el).addEventListener("click", () => bannedDialog(s, me));
+  $("#pl-factions", el)?.addEventListener("click", () => factionsDialog(s));
   $("#pl-inv", el)?.addEventListener("click", () => inventoryHistoryDialog(s, null, me));
   $("#pl-kickall", el)?.addEventListener("click", () => dialog(t("pm_kick_all"), html`<label>${t("kick_reason")}</label><input name="reason" maxlength="120">`,
     async (f) => { const r = await api.post(`/api/servers/${s.id}/players/kick-all`, { name: f.reason.value || "Server maintenance" }); toast(t("pm_kicked", r.kicked)); }, t("a_kick"), true));
@@ -243,12 +245,36 @@ async function renderPlayers(el, s, me) {
   draw();
 }
 
-async function bannedDialog(s) {
+async function bannedDialog(s, me) {
+  let list = [], listError = null;
+  try { list = await api.get(`/api/servers/${s.id}/players/banned`); } catch (ex) { listError = errorText(ex.code); }
+  const mod = atLeast(me.role, "moderator");
+  const ban = (body) => api.post(`/api/servers/${s.id}/players/ban-steam`, body);
+  const dlg = dialog(t("pl_banned"), html`${list.length ? html`<div class="table-wrap"><table><tbody>${list.map((b) => html`<tr>
+      <td><b>${b.name || "?"}</b><div class="hint">${b.steamId}</div></td><td>${when(b.untilUtc)}</td>
+      <td>${mod ? html`<button type="button" class="btn small" data-unban="${b.steamId}">${t("a_unban")}</button>` : ""}</td></tr>`)}</tbody></table></div>`
+    : html`<div class="hint">${listError || "—"}</div>`}
+    ${mod ? html`<h4>${t("bs_title")}</h4><label>SteamID</label><input name="steam" inputmode="numeric" pattern="[0-9]{17}" maxlength="17" placeholder="7656119…">
+      <label>${t("bs_duration")}</label><input name="duration" value="1d" maxlength="5"><div class="hint">${t("bs_duration_hint")}</div>` : ""}`,
+    mod ? async (f) => {
+      if (!f.steam.value.trim()) return true;
+      await ban({ steamId: f.steam.value.trim(), duration: f.duration.value.trim(), unban: false });
+      toast(t("done"));
+    } : () => true, mod ? t("a_ban") : "OK", mod);
+  dlg.querySelectorAll("[data-unban]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await ban({ steamId: b.dataset.unban, unban: true }); toast(t("done")); b.closest("tr").remove(); } catch (ex) { fail(ex); b.disabled = false; }
+  }));
+}
+
+async function factionsDialog(s) {
   let list = [];
-  try { list = await api.get(`/api/servers/${s.id}/players/banned`); } catch (ex) { fail(ex); return; }
-  dialog(t("pl_banned"), html`${list.length ? html`<div class="table-wrap"><table><tbody>${list.map((b) => html`<tr>
-      <td><b>${b.name || "?"}</b><div class="hint">${b.steamId}</div></td><td>${when(b.untilUtc)}</td></tr>`)}</tbody></table></div>`
-    : html`<div class="hint">—</div>`}`, () => true, "OK");
+  try { list = await api.get(`/api/servers/${s.id}/factions`); } catch (ex) { fail(ex); return; }
+  dialog(t("fa_title"), list.length ? html`<div class="table-wrap"><table>
+      <thead><tr><th>${t("fa_abbrev")}</th><th>${t("col_name")}</th><th>${t("fa_online")}</th></tr></thead>
+      <tbody>${list.map((f) => html`<tr><td><b>${f.abbrev || "—"}</b><div class="hint">#${f.id}</div></td><td>${f.name || "—"}</td>
+        <td>${f.online.length ? f.online.map((p) => p.name).join(", ") : "—"}</td></tr>`)}</tbody></table></div>`
+    : html`<div class="hint">${t("fa_none")}</div>`, () => true, "OK");
 }
 
 async function renderPlayer(el, s, me, steamId, back) {
@@ -284,7 +310,7 @@ async function renderPlayer(el, s, me, steamId, back) {
   mount(el, html`<div class="card">
     <div class="actions-row"><button class="btn" id="pl-back">${t("pl_back")}</button></div>
     <div class="server-head"><b class="big-name">${p.name}</b>${p.online ? html`<span class="state ok">${t("pl_online")}</span>` : html`<span class="state">${t("pl_offline")}</span>`}</div>
-    <dl class="kv"><dt>SteamID</dt><dd>${p.steamId}</dd>
+    <dl class="kv"><dt>SteamID</dt><dd>${p.steamId} · <a href="https://steamcommunity.com/profiles/${p.steamId}" target="_blank" rel="noopener">${t("pl_steam_profile")}</a></dd>
       <dt>${t("pl_role")}</dt><dd>${t("role_" + ({ 9: "admin", 6: "moderator", 3: "gamemaster" }[p.permission] || "player"))}</dd>
       <dt>${t("pl_first")}</dt><dd>${when(p.firstSeenUtc)}</dd><dt>${t("pl_seen")}</dt><dd>${when(p.lastSeenUtc)}</dd>
       <dt>${t("pl_playtime")}</dt><dd>${duration(p.playtimeSeconds)}</dd>

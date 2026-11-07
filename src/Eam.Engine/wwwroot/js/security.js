@@ -153,7 +153,8 @@ async function renderJournal(el, s, me) {
       { k: "floodEnabled", type: "check", label: t("se_flood_on") },
       { k: "floodText", type: "text", label: t("se_flood_text") },
       { k: "floodPerMinute", type: "number", label: t("se_flood_n") },
-      { k: "positionSeconds", type: "number", label: t("se_pos") }] },
+      { k: "positionSeconds", type: "number", label: t("se_pos") },
+      { k: "excludedPlayfields", type: "text", label: t("se_excluded_pf") }] },
   ]);
 }
 

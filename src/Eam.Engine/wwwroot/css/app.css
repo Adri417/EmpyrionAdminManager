@@ -248,3 +248,14 @@ tr.row-online { outline: 1px solid color-mix(in srgb, var(--ok) 55%, transparent
   background: color-mix(in srgb, var(--accent-2) 12%, transparent); font-size: 13px; }
 .update-banner b { display: block; color: var(--accent-2); }
 .update-banner .btn { margin-top: 6px; width: 100%; }
+/* 0.9.8: chat tools and channel colours */
+.chat-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.chat-tools input[type=search] { flex: 1 1 180px; }
+.chat-line.ch-Faction .badge { color: #4ade80; border-color: #4ade80; }
+.chat-line.ch-Alliance .badge { color: #60a5fa; border-color: #60a5fa; }
+.chat-line.ch-SinglePlayer .badge { color: #f472b6; border-color: #f472b6; }
+.chat-line.ch-Server .badge { color: var(--warn); border-color: var(--warn); }
+.warn-list { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.chat-tools select, .chat-tools .check { width: auto; flex: 0 0 auto; margin: 0; }
+.chat-tools input[type=search] { width: auto; margin: 0; }
+[hidden] { display: none !important; }

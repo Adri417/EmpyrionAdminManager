@@ -496,6 +496,35 @@ public sealed class PlayerService
         });
     }
 
+    /// <summary>Ban or unban any Steam ID, even a player never seen on this server.</summary>
+    public async Task BanSteamAsync(long id, Eam.Engine.Api.BanSteamRequest r, string by)
+    {
+        var steam = (r.SteamId ?? "").Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(steam, @"^\d{17}$")) throw new ServerException("invalid_steam_id");
+        var def = _manager.Definition(id);
+        if (r.Unban)
+        {
+            await _manager.ConsoleAsync(id, $"unban {steam}", by);
+            ServerManager.ServerLog(def, $"{by}: unban {steam}");
+            return;
+        }
+        var d = (r.Duration ?? "1d").Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(d, @"^\d{1,4}[mhdy]$")) throw new ServerException("invalid_duration");
+        await _manager.ConsoleAsync(id, $"ban {steam} {d}", by);
+        ServerManager.ServerLog(def, $"{by}: ban {steam} {d}{(string.IsNullOrWhiteSpace(r.Reason) ? "" : " · " + Clean(r.Reason, 200))}");
+    }
+
+    /// <summary>Factions known by the game, with their members online now.</summary>
+    public object Factions(long id)
+    {
+        var online = _live.OnlinePlayers(id);
+        return _live.FactionDetails(id).Select(f => new
+        {
+            f.Id, f.Abbrev, f.Name,
+            online = online.Where(p => p.FactionId == f.Id).Select(p => new { p.Name, p.SteamId, p.Playfield }).ToList(),
+        }).OrderBy(f => f.Abbrev).ToList();
+    }
+
     public async Task<int> KickAllAsync(long id, string reason, string by)
     {
         var n = 0;

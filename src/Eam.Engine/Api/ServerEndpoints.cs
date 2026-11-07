@@ -48,8 +48,8 @@ public static class ServerEndpoints
 
         // Step 3: live view (players, playfields, performance) and chat.
         g.MapGet("/{id:long}/live", (long id, LiveService l) => Results.Ok(l.Snapshot(id))).RequireAuthorization(Roles.Viewer);
-        g.MapGet("/{id:long}/chat", (long id, long? before, int? limit, LiveService l) =>
-            Run(() => Task.FromResult<object>(l.Chat(id, limit ?? 100, before)))).RequireAuthorization(Roles.Viewer);
+        g.MapGet("/{id:long}/chat", (long id, long? before, int? limit, string? q, LiveService l) =>
+            Run(() => Task.FromResult<object>(l.Chat(id, limit ?? 100, before, q)))).RequireAuthorization(Roles.Viewer);
         g.MapPost("/{id:long}/chat", (long id, ChatRequest req, LiveService l, HttpContext c) =>
             Run(async () => (object?)await l.SendAsync(id, req.Text, req.Mode ?? "chat", req.PlayerId, By(c)) ?? Ok)).RequireAuthorization(Roles.Moderator);
 

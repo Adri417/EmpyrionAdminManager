@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.8 (2026-11-07) - Ce qui manquait encore par rapport à EAH et EWA
+- Chat : recherche dans tout l'historique, filtre par canal, défilement auto activable, couleur par canal, message privé à un joueur connecté.
+- Joueurs : bannir ou débannir par SteamID (même un joueur jamais venu), bouton « Débannir » dans la liste des bannis, liste des factions avec leurs membres en ligne, lien vers le profil Steam.
+- Vue d'ensemble : dernières alertes des 24 dernières heures, et badge « Mise à jour du jeu disponible » (EAM regarde sur Steam toutes les 3 heures).
+- Sécurité : playfields exclus des statistiques et du suivi des positions.
+
 ## 0.9.7 (2026-11-07) - Messages de connexion, nom de l'admin, bases plus solides
 - Chat : option pour annoncer « X a rejoint le serveur » et « X a quitté le serveur » (textes modifiables, pseudo Steam). Pas d'annonce pour les joueurs déjà là quand EAM redémarre.
 - Chat : les messages écrits dans EAM s'affichent en jeu avec le nom de l'admin (« Adrien: bonjour »). Option dans Communauté.

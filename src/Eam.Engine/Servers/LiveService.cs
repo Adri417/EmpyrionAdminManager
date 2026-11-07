@@ -54,6 +54,7 @@ public sealed class ServerLive
     public readonly Dictionary<int, LivePlayer> Players = new();
     public readonly Dictionary<string, LivePlayfield> Playfields = new(StringComparer.OrdinalIgnoreCase);
     public readonly Dictionary<int, string> Factions = new();
+    public readonly Dictionary<int, string> FactionNames = new();
     public float? DediFps;
     public int? DediMemoryMb;
     public int? DediUptime;
@@ -149,6 +150,14 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         lock (l.Gate) return l.Factions.TryGetValue(factionId, out var f) ? f : null;
     }
 
+    public sealed record FactionInfo(int Id, string Abbrev, string Name);
+
+    public IReadOnlyList<FactionInfo> FactionDetails(long id)
+    {
+        var l = Live(id);
+        lock (l.Gate) return l.Factions.Select(f => new FactionInfo(f.Key, f.Value, l.FactionNames.GetValueOrDefault(f.Key) ?? "")).ToList();
+    }
+
     public IReadOnlyDictionary<int, string> Factions(long id)
     {
         var l = Live(id);
@@ -208,10 +217,10 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         }
     }
 
-    public IReadOnlyList<ChatEntry> Chat(long id, int limit, long? beforeId)
+    public IReadOnlyList<ChatEntry> Chat(long id, int limit, long? beforeId, string? search = null)
     {
         var def = store.Find(id) ?? throw new ServerException("not_found");
-        return Data(def).RecentChat(limit, beforeId);
+        return Data(def).RecentChat(limit, beforeId, search);
     }
 
     // ------------------------------------------------------------------ sending messages
@@ -229,6 +238,25 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         var rt = manager.Runtime(id);
         if (rt.State != ServerState.Running) throw new ServerException("server_not_running");
         _links.TryGetValue(id, out var link);
+
+        if (mode == "private")
+        {
+            // Private message in the game chat ("say p:<player> '...'"), kept in EAM's chat history.
+            if (playerId is not { } to || Online(id, to) is not { } target) throw new ServerException("player_offline");
+            var priv = (!asServer && FeatureStore.Load<CommunitySettings>(Data(def), "community").ShowAdminName ? $"{by}: {text}" : text).Replace("'", "’");
+            var lp = Live(id);
+            lock (lp.Gate)
+            {
+                lp.RecentlySent.RemoveAll(x => DateTime.UtcNow - x.At > TimeSpan.FromSeconds(30));
+                lp.RecentlySent.Add((DateTime.UtcNow, priv));
+            }
+            var cmdText = $"say p:{to} '{priv}'";
+            if (link is not null) await link.SendAsync(new { op = "console", cmd = cmdText });
+            else await manager.ConsoleAsync(id, cmdText, by);
+            var pe = Data(def).AddChat(DateTime.UtcNow, "SinglePlayer", -1, by, null, to, $"→ {target.Name}: {text.Replace("'", "’")}", "eam");
+            await hub.BroadcastAsync(new { type = "chat", id, msg = pe }, CancellationToken.None);
+            return pe;
+        }
 
         if (mode == "popup")
         {
@@ -582,8 +610,12 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     lock (l.Gate)
                     {
                         l.Factions.Clear(); // deleted factions disappear too
+                        l.FactionNames.Clear();
                         foreach (var f in fl.EnumerateArray())
+                        {
                             l.Factions[Int(f, "id")] = Str(f, "abbrev") is { Length: > 0 } a ? a : Str(f, "name") ?? "";
+                            l.FactionNames[Int(f, "id")] = Str(f, "name") ?? "";
+                        }
                     }
                 break;
 

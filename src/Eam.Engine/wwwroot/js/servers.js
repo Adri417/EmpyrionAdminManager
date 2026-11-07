@@ -85,6 +85,21 @@ extend({
 
 const ROLES = ["owner", "admin", "gamemaster", "moderator", "viewer"];
 const atLeast = (role, required) => ROLES.indexOf(role) <= ROLES.indexOf(required);
+
+// Latest warnings of the server journal, shown on the overview (fetched at most once a minute).
+const warnCache = {};
+async function drawWarnings(el, s) {
+  const box = document.createElement("div");
+  el.prepend(box);
+  let c = warnCache[s.id];
+  if (!c || Date.now() - c.at > 60000) {
+    try { c = warnCache[s.id] = { at: Date.now(), list: (await api.get(`/api/servers/${s.id}/journal?severity=2`)).slice(0, 5) }; } catch { return; }
+  }
+  const recent = c.list.filter((j) => Date.now() - new Date(j.utc).getTime() < 24 * 3600 * 1000);
+  if (!recent.length || !box.isConnected) return;
+  mount(box, html`<div class="card warn-card"><h3>${t("ov_warnings")}</h3><ul class="warn-list">${recent.map((j) => html`<li>
+    <span class="chat-time">${new Date(j.utc).toLocaleString()}</span> <span class="badge">${j.category}</span> ${j.name ? html`<b>${j.name}</b> ` : ""}${j.text}</li>`)}</ul></div>`);
+}
 const store = { servers: [], me: null, onChange: null };
 
 export function initServers(me) { store.me = me; }
@@ -271,11 +286,12 @@ export async function renderServerDetail(page, id, setTitle) {
         <dt>${t("folder")}</dt><dd>${s.rootDir}</dd>
         <dt>${t("ports")}</dt><dd>${s.gamePort}-${s.gamePort + 3} (UDP/TCP) · telnet ${s.telnetPort} · mod EAM ${s.modPort}</dd>
         <dt>${t("branch")}</dt><dd>${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}</dd>
-        <dt>${t("build")}</dt><dd>${s.buildId || "—"}</dd>
+        <dt>${t("build")}</dt><dd>${s.buildId || "—"}${s.gameUpdateAvailable ? html` <span class="badge warn" title="${t("gu_hint")}">${t("gu_available", s.latestBuild)}</span>` : ""}</dd>
         <dt>${t("srv_max_players")}</dt><dd>${s.maxPlayers ?? "—"}</dd>
         ${s.startedUtc ? html`<dt>${t("since")}</dt><dd>${new Date(s.startedUtc).toLocaleString()}</dd>` : ""}
       </dl></div>`);
       renderLive($("#live", el), s);
+      if (atLeast(store.me.role, "moderator")) drawWarnings(el, s);
     } else if (tab === "chat") {
       if (el.dataset.tab === "chat") return;
       renderChat(el, s, store.me);

@@ -68,6 +68,41 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
         finally { Gate.Release(); }
     }
 
+    /// <summary>Latest build of the dedicated server on Steam, per branch ("public", "experimental"), from the last check.</summary>
+    public IReadOnlyDictionary<string, string> LatestBuilds { get; private set; } = new Dictionary<string, string>();
+    public DateTime? LatestCheckedUtc { get; private set; }
+
+    /// <summary>Asks Steam which build of the dedicated server is the newest (does not download anything).</summary>
+    public async Task<IReadOnlyDictionary<string, string>> CheckLatestBuildsAsync(CancellationToken ct)
+    {
+        if (!IsInstalled) return LatestBuilds;
+        await Gate.WaitAsync(ct);
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            var args = new List<string> { "+login", "anonymous", "+app_info_update", "1", "+app_info_print", EmpyrionDedicatedAppId, "+quit" };
+            await RunAsync(args, null, line => sb.AppendLine(line), ct);
+            var found = ParseBranchBuilds(sb.ToString());
+            if (found.Count > 0) { LatestBuilds = found; LatestCheckedUtc = DateTime.UtcNow; }
+            return LatestBuilds;
+        }
+        finally { Gate.Release(); }
+    }
+
+    /// <summary>Reads the "branches" block of app_info_print: branch name → buildid (public for tests).</summary>
+    public static Dictionary<string, string> ParseBranchBuilds(string text)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var start = text.IndexOf("\"branches\"", StringComparison.OrdinalIgnoreCase);
+        if (start < 0) return result;
+        foreach (Match m in BranchBuild().Matches(text[start..]))
+            result.TryAdd(m.Groups[1].Value, m.Groups[2].Value);
+        return result;
+    }
+
+    [GeneratedRegex("\"([A-Za-z0-9_.-]+)\"\\s*\\{\\s*\"buildid\"\\s*\"(\\d+)\"")]
+    private static partial Regex BranchBuild();
+
     /// <summary>Empyrion's Steam app (the game, not the dedicated server): owner of the Workshop items.</summary>
     public const string EmpyrionGameAppId = "383120";
 
