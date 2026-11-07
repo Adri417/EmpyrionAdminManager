@@ -1,0 +1,38 @@
+EMPYRION ADMIN MANAGER
+======================
+
+Francais
+--------
+1. Decompressez ce dossier ou vous voulez (par exemple C:\EmpyrionAdminManager).
+2. Lancez EmpyrionAdminManager.exe : la fenetre demarre le moteur et vous demande
+   de creer le compte administrateur.
+3. Pour que le moteur tourne en permanence (meme sans fenetre ouverte, et au
+   demarrage de Windows), double-cliquez sur "Installer-le-service.cmd".
+4. Depuis un navigateur sur la meme machine : http://127.0.0.1:8790/
+   L'acces depuis d'autres machines (HTTPS) s'active dans Parametres.
+
+Les donnees (comptes, reglages, journaux) sont dans
+C:\ProgramData\EmpyrionAdminManager, sauf si un fichier "portable.txt" est
+present a cote des .exe : elles sont alors dans le sous-dossier "data".
+
+Necessite Windows 10/11 ou Windows Server 2019+ (64 bits) et le composant
+Microsoft Edge WebView2 (deja present sur la plupart des Windows).
+
+English
+-------
+1. Unzip this folder anywhere (for example C:\EmpyrionAdminManager).
+2. Run EmpyrionAdminManager.exe: the window starts the engine and asks you to
+   create the administrator account.
+3. To keep the engine running all the time (even with no window open, and when
+   Windows starts), double-click "Installer-le-service.cmd".
+4. From a browser on the same machine: http://127.0.0.1:8790/
+   Access from other machines (HTTPS) is turned on in Settings.
+
+Data (accounts, settings, logs) lives in C:\ProgramData\EmpyrionAdminManager,
+unless a "portable.txt" file sits next to the .exe files: then it is in the
+"data" sub-folder.
+
+Requires 64-bit Windows 10/11 or Windows Server 2019+ and the Microsoft Edge
+WebView2 Runtime (already present on most Windows installations).
+
+License: MIT (see LICENSE.txt).
