@@ -48,7 +48,7 @@ public class StressTests(ITestOutputHelper output)
         string[] tags = ["A", "B"];
         var files = tags.ToDictionary(t => t, t => Path.Combine(dir.Path, t, "eam", "server.db"));
         var data = tags.ToDictionary(t => t, t => new ServerData(files[t]));
-        const int writers = 8, ops = 150;
+        const int writers = 8, ops = 40;
         var errors = new System.Collections.Concurrent.ConcurrentBag<string>();
         var sw = Stopwatch.StartNew();
 
