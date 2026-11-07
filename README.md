@@ -271,7 +271,7 @@ pwsh tools/publish.ps1     # Windows (or tools/publish.sh on Linux with the Micr
 ```
 
 The release lands in `dist/EmpyrionAdminManager-<version>.zip`.
-Pushing a tag `vX.Y.Z` builds the release on GitHub and attaches the zip to it automatically.
+Each new version pushed to `main` (version number in `Directory.Build.props`) is built and published automatically as a GitHub release.
 
 `lib/empyrion/Mif.dll` is Eleon's modding interface from the game folder. It is used only to compile the EAM mod and is not shipped with EAM.
 
@@ -562,7 +562,7 @@ pwsh tools/publish.ps1     # Windows (ou tools/publish.sh sous Linux avec le SDK
 ```
 
 La version se trouve dans `dist/EmpyrionAdminManager-<version>.zip`.
-Pousser un tag `vX.Y.Z` compile la version sur GitHub et y joint le zip automatiquement.
+Chaque nouvelle version poussée sur `main` (numéro dans `Directory.Build.props`) est compilée et publiée automatiquement en release GitHub.
 
 `lib/empyrion/Mif.dll` est l'interface de modding d'Eleon, issue du dossier du jeu. Il sert seulement à compiler le mod EAM et n'est pas livré avec EAM.
 
