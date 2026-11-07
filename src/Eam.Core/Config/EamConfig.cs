@@ -61,6 +61,14 @@ public sealed class EamConfig
         if (RemoteAccess.Enabled && RemoteAccess.Port == LocalPort)
             throw new InvalidDataException("remoteAccess.port must differ from localPort.");
         if (SessionDays is < 1 or > 365) SessionDays = 14;
+        var le = RemoteAccess.LetsEncrypt;
+        if (le.Enabled)
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(le.Domain, @"^(?=.{4,253}$)([a-zA-Z0-9-]{1,63}\.)+[a-zA-Z]{2,63}$")) throw new InvalidDataException("letsEncrypt.domain is not a valid domain name.");
+            if (!le.Email.Contains('@')) throw new InvalidDataException("letsEncrypt.email is required.");
+            if (!le.AcceptTerms) throw new InvalidDataException("Let's Encrypt terms must be accepted.");
+            if (le.HttpPort is < 1 or > 65535 || le.HttpPort == LocalPort || le.HttpPort == RemoteAccess.Port) throw new InvalidDataException("letsEncrypt.httpPort is invalid.");
+        }
         if (Language is not ("auto" or "fr" or "en")) Language = "auto";
     }
 }
@@ -76,4 +84,17 @@ public sealed class RemoteAccessConfig
     public string CertificatePath { get; set; } = "";
 
     public string CertificatePassword { get; set; } = "";
+
+    /// <summary>Free certificate from Let's Encrypt for a domain name pointing to this machine (port 80 must reach it).</summary>
+    public LetsEncryptConfig LetsEncrypt { get; set; } = new();
+}
+
+public sealed class LetsEncryptConfig
+{
+    public bool Enabled { get; set; }
+    public string Domain { get; set; } = "";
+    public string Email { get; set; } = "";
+    /// <summary>Port where Let's Encrypt checks the domain (80, or another port forwarded from 80 by the router).</summary>
+    public int HttpPort { get; set; } = 80;
+    public bool AcceptTerms { get; set; }
 }

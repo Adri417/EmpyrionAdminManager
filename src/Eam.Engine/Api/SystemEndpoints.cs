@@ -5,7 +5,8 @@ using Eam.Core.Security;
 
 namespace Eam.Engine.Api;
 
-public sealed record SettingsRequest(int LocalPort, bool RemoteEnabled, int RemotePort, string? CertificatePath, string? CertificatePassword, string Language, int SessionDays);
+public sealed record SettingsRequest(int LocalPort, bool RemoteEnabled, int RemotePort, string? CertificatePath, string? CertificatePassword, string Language, int SessionDays,
+    LetsEncryptConfig? LetsEncrypt = null);
 
 public static class SystemEndpoints
 {
@@ -13,7 +14,7 @@ public static class SystemEndpoints
     {
         app.MapGet("/api/system", (SystemMonitor mon) => Results.Ok(mon.Take())).RequireAuthorization(Roles.Viewer);
 
-        app.MapGet("/api/settings", (EamConfig cfg, EamPaths paths) => Results.Ok(new
+        app.MapGet("/api/settings", (EamConfig cfg, EamPaths paths, Eam.Engine.Infrastructure.LetsEncryptService le) => Results.Ok(new
         {
             dataFolder = paths.DataRoot,
             configFile = paths.ConfigFile,
@@ -25,6 +26,8 @@ public static class SystemEndpoints
             hasCertificatePassword = cfg.RemoteAccess.CertificatePassword.Length > 0,
             language = cfg.Language,
             sessionDays = cfg.SessionDays,
+            letsEncrypt = EamConfig.Load(paths).RemoteAccess.LetsEncrypt,
+            letsEncryptStatus = new { error = le.LastError, expiresUtc = le.Expires },
         })).RequireAuthorization(Roles.Owner);
 
         // Saved to eam.json; network changes apply after the engine restarts.
@@ -43,6 +46,7 @@ public static class SystemEndpoints
                     CertificatePath = req.CertificatePath?.Trim() ?? "",
                     // Empty = keep the stored password.
                     CertificatePassword = string.IsNullOrEmpty(req.CertificatePassword) ? current.RemoteAccess.CertificatePassword : req.CertificatePassword,
+                    LetsEncrypt = req.LetsEncrypt ?? current.RemoteAccess.LetsEncrypt,
                 },
             };
             try { next.Validate(); }
@@ -54,7 +58,8 @@ public static class SystemEndpoints
             lf.CreateLogger("Settings").LogInformation("{By} changed the settings", ctx.User.Identity?.Name);
             var restart = next.LocalPort != current.LocalPort || next.RemoteAccess.Enabled != current.RemoteAccess.Enabled
                           || next.RemoteAccess.Port != current.RemoteAccess.Port || next.RemoteAccess.CertificatePath != current.RemoteAccess.CertificatePath
-                          || next.SessionDays != current.SessionDays;
+                          || next.SessionDays != current.SessionDays
+                          || System.Text.Json.JsonSerializer.Serialize(next.RemoteAccess.LetsEncrypt) != System.Text.Json.JsonSerializer.Serialize(current.RemoteAccess.LetsEncrypt);
             return Results.Ok(new { restartRequired = restart });
         }).RequireAuthorization(Roles.Owner);
     }

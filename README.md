@@ -42,10 +42,10 @@ and later `servers\<name>\` (one fully separate folder per game server) and `ste
 3. Game mod + live players/chat (done)
 4. Scheduler and backups, every server and game option, scenarios from the Steam Workshop (done)
 5. Players: details, inventory, credits, experience, items, teleport, kick/ban, roles, offline messages, history (done)
-6. Structures and playfields
-7. Chat bot, Discord
-8. Anti-cheat, logs, statistics
-9. Mod manager, events, autominer, remaining features
+6. Structures (move, clone, export, import), blueprints, Shared cleanup, limits and auto-wipes, reserved playfields, 2D/3D maps, galaxy (done)
+7. Chat bot, alerts, translation, insult filter, mute, welcome messages, Discord bridge (done)
+8. Anti-cheat, attack log, structure and position history, 7-day statistics, pole control, emergency teleport, flood protection (done)
+9. Let's Encrypt, mod manager, Autominer, events, maintenance tools (done)
 10. Migration and first public release
 
 Empyrion - Galactic Survival is a trademark of Eleon Game Studios. This project is not affiliated with Eleon.
