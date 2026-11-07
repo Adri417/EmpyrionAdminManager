@@ -13,7 +13,7 @@ namespace Eam.Mod
     /// </summary>
     public sealed class EamMod : ModInterface
     {
-        public const string ModVersion = "0.3.1";
+        public const string ModVersion = "0.3.2";
 
         private ModGameAPI _api;
         private LinkServer _link;
@@ -151,6 +151,7 @@ namespace Eam.Mod
                     if (fl.factions != null)
                         foreach (var f in fl.factions) list.Add(Ev("f", "id", f.factionId, "name", f.name, "abbrev", f.abbrev));
                     return Ev("factions", "list", list);
+                case CmdId.Event_Faction_Changed when data is FactionChangeInfo fc: return Ev("faction_changed", "id", fc.id, "factionId", fc.factionId);
                 case CmdId.Event_Error when data is ErrorInfo err: return Ev("error", "code", err.errorType.ToString());
                 default: return null;
             }
