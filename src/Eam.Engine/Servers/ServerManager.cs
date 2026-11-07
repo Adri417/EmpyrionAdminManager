@@ -88,6 +88,9 @@ public sealed class ServerManager : BackgroundService
 
     public IReadOnlyList<ServerDefinition> Definitions() => _store.List();
 
+    /// <summary>True while a server install, update, copy or backup holds its lock (used before a program update).</summary>
+    public bool AnyBusy() => _store.List().Any(s => Runtime(s.Id).Operation is not null);
+
     /// <summary>Runs an operation with the server's lock (nothing else runs on it meanwhile).</summary>
     public Task RunExclusiveAsync(long id, string operation, bool requireStopped, Func<ServerDefinition, ServerRuntime, Task> action) =>
         WithLock(id, operation, async (def, rt) =>
@@ -179,6 +182,105 @@ public sealed class ServerManager : BackgroundService
             return def;
         }
         finally { CreateGate.Release(); }
+    }
+
+    /// <summary>
+    /// Adds an Empyrion server that already exists on this machine (for example one run with EAH).
+    /// copy = true copies the whole folder into EAM's servers folder (the original is not touched);
+    /// copy = false uses the folder in place. Ports, telnet password and options come from its dedicated yaml.
+    /// </summary>
+    public async Task<ServerDefinition> AdoptAsync(string? name, string gameDir, string? yamlName, bool copy, string by)
+    {
+        gameDir = Path.GetFullPath((gameDir ?? "").Trim().Trim('"'));
+        if (!Directory.Exists(gameDir)) throw new ServerException("not_found", gameDir);
+        if (!File.Exists(Path.Combine(gameDir, "EmpyrionLauncher.exe")) && !File.Exists(Path.Combine(gameDir, "DedicatedServer", "EmpyrionDedicated.exe")))
+            throw new ServerException("not_an_empyrion_server", gameDir);
+        var yamlFile = new[] { yamlName, "dedicated-eam.yaml", "dedicated.yaml" }
+            .Where(n => !string.IsNullOrWhiteSpace(n) && n!.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
+            .Select(n => Path.Combine(gameDir, n!)).FirstOrDefault(File.Exists);
+        var yaml = yamlFile is null ? DedicatedYaml.Default() : DedicatedYaml.Load(yamlFile);
+        var cleanName = CleanName(string.IsNullOrWhiteSpace(name) ? yaml.Get("ServerConfig", "Srv_Name") ?? "Imported server" : name);
+        await CreateGate.WaitAsync();
+        try
+        {
+            var all = _store.List();
+            if (all.Any(s => string.Equals(s.Name, cleanName, StringComparison.OrdinalIgnoreCase))) throw new ServerException("name_taken");
+            foreach (var o in all)
+                if (IsUnder(gameDir, o.GameDir) || IsUnder(o.GameDir, gameDir) || IsUnder(gameDir, o.RootDir)) throw new ServerException("folder_used_by_server");
+            var gamePort = int.TryParse(yaml.Get("ServerConfig", "Srv_Port"), out var gp) ? gp : PortAllocator.Suggest(all).GamePort;
+            var telnetPort = int.TryParse(yaml.Get("ServerConfig", "Tel_Port"), out var tp) ? tp : gamePort + 4;
+            if (PortAllocator.Check(gamePort, telnetPort, all) is { } portError) throw new ServerException(portError);
+            var telnetPwd = yaml.Get("ServerConfig", "Tel_Pwd") is { Length: >= 4 } pwd ? pwd : NewSecret();
+            var slug = UniqueSlug(Slug.From(cleanName), all);
+            var root = Path.Combine(_paths.ServersDir, slug);
+            EnsureFolderFree(root, all);
+            Directory.CreateDirectory(root);
+            var def = _store.Add(new ServerDefinition
+            {
+                Slug = slug, Name = cleanName, RootDir = root, GamePort = gamePort, TelnetPort = telnetPort, TelnetPassword = telnetPwd,
+                Branch = "public", AutoStart = false, AutoRestart = true, ModKey = NewModKey(), Installed = !copy,
+                GameDirOverride = copy ? null : gameDir,
+            });
+            Directory.CreateDirectory(def.LogsDir);
+            ServerLog(def, $"Server imported by {by} from {gameDir} ({(copy ? "copied" : "used in place")}), yaml {yamlFile ?? "default"}");
+            var rt = Runtime(def.Id);
+            if (!copy)
+            {
+                ApplyManagedKeys(yaml, def);
+                yaml.Save(def.YamlFile);
+                rt.State = ServerState.Stopped;
+                await BroadcastListAsync();
+                return def;
+            }
+            rt.State = ServerState.Installing;
+            rt.Progress = 0;
+            rt.ProgressText = "copy";
+            await BroadcastListAsync();
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Run(() => CopyTree(gameDir, def.GameDir, rt));
+                    ApplyManagedKeys(yaml, def);
+                    yaml.Save(def.YamlFile);
+                    _store.Update(def with { Installed = true });
+                    rt.State = ServerState.Stopped;
+                    ServerLog(def, "Copy finished");
+                }
+                catch (Exception e)
+                {
+                    rt.State = ServerState.NotInstalled;
+                    rt.LastError = "copy_failed: " + e.Message;
+                    ServerLog(def, "Copy failed: " + e.Message);
+                }
+                finally
+                {
+                    rt.Progress = null;
+                    rt.ProgressText = null;
+                    await BroadcastListAsync();
+                }
+            });
+            return def;
+        }
+        finally { CreateGate.Release(); }
+    }
+
+    private void CopyTree(string from, string to, ServerRuntime rt)
+    {
+        var files = new DirectoryInfo(from).EnumerateFiles("*", SearchOption.AllDirectories).ToList();
+        var total = Math.Max(1, files.Sum(f => f.Length));
+        long done = 0;
+        var lastPush = DateTime.UtcNow;
+        foreach (var f in files)
+        {
+            var rel = Path.GetRelativePath(from, f.FullName);
+            var target = Path.Combine(to, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            f.CopyTo(target, overwrite: true);
+            done += f.Length;
+            rt.Progress = Math.Round(done * 100.0 / total, 1);
+            if (DateTime.UtcNow - lastPush > TimeSpan.FromSeconds(1)) { lastPush = DateTime.UtcNow; _ = BroadcastListAsync(); }
+        }
     }
 
     public async Task RenameAsync(long id, string newName, string by)

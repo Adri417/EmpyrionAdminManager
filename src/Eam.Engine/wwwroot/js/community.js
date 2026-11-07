@@ -101,6 +101,11 @@ export async function renderCommunity(tab, el, s, me) {
       { k: "survivalKit", type: "rows", label: t("cm_kit"), cols: [{ k: "id", label: t("cm_item"), type: "number" }, { k: "count", label: t("cm_count"), type: "number", default: 1 }] },
       { k: "survivalCredits", type: "number", label: t("cm_credits") },
       { k: "survivalSeason", type: "text", label: t("cm_season") }] },
+    { title: t("cm_reset_title"), hint: t("cm_reset_hint"), open: false, fields: [
+      { k: "resetEnabled", type: "check", label: t("cm_reset_on") },
+      { k: "resetFreeCount", type: "number", label: t("cm_reset_free") },
+      { k: "resetFreeHours", type: "number", label: t("cm_reset_free_hours") },
+      { k: "resetEveryHours", type: "number", label: t("cm_reset_every") }] },
     { title: t("cm_alerts"), hint: t("cm_alert_hint"), open: false, fields: [{ k: "alertWords", type: "lines", label: t("cm_alert_words") }] },
     { title: t("cm_filter"), open: false, fields: [
       { k: "filterEnabled", type: "check", label: t("cm_filter_on") },

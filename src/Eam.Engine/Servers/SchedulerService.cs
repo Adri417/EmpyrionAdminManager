@@ -17,6 +17,21 @@ public sealed class TaskParams
     public string? Wipe { get; set; }
     public bool BackupFirst { get; set; }
     public int LogDays { get; set; } = 14;
+    /// <summary>Wipe: playfields never wiped by "*" (all) or by a solar system.</summary>
+    public List<string> Exclude { get; set; } = [];
+    /// <summary>Wipe: every playfield of this solar system (from the galaxy and the structures seen there).</summary>
+    public string? SolarSystem { get; set; }
+    /// <summary>Old players / inventory copies: older than this many days.</summary>
+    public int Days { get; set; } = 90;
+    /// <summary>Sequence: steps run one after the other, with a pause after each.</summary>
+    public List<TaskStep> Steps { get; set; } = [];
+}
+
+public sealed class TaskStep
+{
+    public string Kind { get; set; } = "message";
+    public TaskParams? Params { get; set; }
+    public int DelaySeconds { get; set; }
 }
 
 public sealed record TaskRequest(string Kind, bool Enabled, JsonElement Schedule, JsonElement? Params);
@@ -26,9 +41,10 @@ public sealed record TaskRequest(string Kind, bool Enabled, JsonElement Schedule
 /// wipes, cleanups, game updates). Checked every 15 seconds; a task late by more than 10 minutes
 /// (EAM was not running) is skipped instead of running at the wrong time.
 /// </summary>
-public sealed class SchedulerService(ServerManager manager, LiveService live, BackupService backups, LiveHub hub, ILogger<SchedulerService> log) : BackgroundService
+public sealed class SchedulerService(ServerManager manager, LiveService live, BackupService backups, WorldService world, LiveHub hub, ILogger<SchedulerService> log) : BackgroundService
 {
-    public static readonly string[] Kinds = ["restart", "stop", "start", "backup", "message", "command", "wipe", "cleanup", "update"];
+    public static readonly string[] Kinds = ["restart", "stop", "start", "backup", "message", "command", "wipe", "cleanup", "update",
+        "sequence", "backup_structures", "shared_cleanup", "limits", "cleanup_players", "cleanup_inventories"];
     public static readonly string[] WipeKinds = ["deposit", "poi", "terrain", "all"];
     private static readonly TimeSpan MaxLate = TimeSpan.FromMinutes(10);
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -108,7 +124,19 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
             case "wipe":
                 if (!WipeKinds.Contains(p.Wipe)) throw new ServerException("invalid_wipe");
                 p.Playfields = p.Playfields.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
-                if (p.Playfields.Count == 0 || p.Playfields.Any(x => x.Length > 80 || x.IndexOfAny(['\'', '\r', '\n']) >= 0)) throw new ServerException("invalid_playfields");
+                p.Exclude = p.Exclude.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
+                p.SolarSystem = string.IsNullOrWhiteSpace(p.SolarSystem) ? null : p.SolarSystem.Trim();
+                if (p.Playfields.Count == 0 && p.SolarSystem is null || p.Playfields.Concat(p.Exclude).Any(x => x.Length > 80 || x.IndexOfAny(['\'', '\r', '\n']) >= 0))
+                    throw new ServerException("invalid_playfields");
+                break;
+            case "cleanup_players":
+            case "cleanup_inventories":
+                p.Days = Math.Clamp(p.Days, 1, 3650);
+                break;
+            case "sequence":
+                if (p.Steps.Count is 0 or > 20 || p.Steps.Any(x => x.Kind is "sequence" || !Kinds.Contains(x.Kind) || x.DelaySeconds is < 0 or > 3600))
+                    throw new ServerException("invalid_steps");
+                foreach (var step in p.Steps) { step.Params ??= new TaskParams(); Validate(step.Kind, step.Params); }
                 break;
             case "cleanup":
                 p.LogDays = Math.Clamp(p.LogDays, 1, 365);
@@ -216,9 +244,11 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
             case "wipe":
             {
                 if (!running) return "skipped_not_running";
-                if (p.BackupFirst) await backups.CreateAsync(def.Id, "before-wipe", who, string.Join(", ", p.Playfields));
+                var targets = WipeTargets(def, p);
+                if (targets.Count == 0) return "skipped_no_playfield";
+                if (p.BackupFirst) await backups.CreateAsync(def.Id, "before-wipe", who, string.Join(", ", targets));
                 var done = new List<string>();
-                foreach (var pf in p.Playfields)
+                foreach (var pf in targets)
                 {
                     await manager.ConsoleAsync(def.Id, $"wipe '{pf}' {p.Wipe}", who);
                     done.Add(pf);
@@ -234,9 +264,62 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
                     await manager.UpdateFilesAsync(d, r, who);
                 });
                 return "ok";
+            case "sequence":
+            {
+                var results = new List<string>();
+                foreach (var step in p.Steps)
+                {
+                    var r = await RunAsync(def, new ScheduledTask(t.Id, step.Kind, true, t.Schedule, JsonSerializer.Serialize(step.Params ?? new TaskParams(), Json), null, null), by);
+                    results.Add($"{step.Kind}: {r}");
+                    if (r.StartsWith("error", StringComparison.Ordinal)) break;
+                    if (step.DelaySeconds > 0) await Task.Delay(TimeSpan.FromSeconds(step.DelaySeconds));
+                }
+                return "ok " + string.Join(" | ", results);
+            }
+            case "backup_structures":
+                var bs = await backups.CreateAsync(def.Id, "structures", who);
+                return "ok " + bs.Name;
+            case "shared_cleanup":
+                if (!running) return "skipped_not_running";
+                await world.RefreshAsync(def.Id);
+                return "ok " + JsonSerializer.Serialize(world.SharedClean(def.Id, who), Json);
+            case "limits":
+                if (!running) return "skipped_not_running";
+                await world.RefreshAsync(def.Id);
+                return "ok " + JsonSerializer.Serialize(world.Violations(def.Id), Json).Length + " bytes of report (see Structures > Rules)";
+            case "cleanup_players":
+                return "ok " + live.Data(def).ForgetInactivePlayers(p.Days) + " rows";
+            case "cleanup_inventories":
+                return "ok " + live.Data(def).PruneInventorySnapshots(p.Days) + " copies";
             default:
                 return "error:unknown_kind";
         }
+    }
+
+    /// <summary>Playfields of a wipe task: the list ("*" = every known playfield), a solar system, minus the exclusions.</summary>
+    private List<string> WipeTargets(ServerDefinition def, TaskParams p)
+    {
+        var data = live.Data(def);
+        var all = data.Structures().Select(x => x.Playfield).Where(x => !string.IsNullOrEmpty(x));
+        var list = new List<string>();
+        foreach (var pf in p.Playfields)
+        {
+            if (pf == "*") list.AddRange(all);
+            else list.Add(pf);
+        }
+        if (p.SolarSystem is { } ss)
+        {
+            list.AddRange(data.Structures().Where(x => string.Equals(x.SolarSystem, ss, StringComparison.OrdinalIgnoreCase)).Select(x => x.Playfield));
+            try
+            {
+                var galaxy = GalaxyReader.Read(GalaxyReader.GlobalDb(def, WorldService.SaveName(def)));
+                var sys = galaxy.FirstOrDefault(g => string.Equals(g.Name, ss, StringComparison.OrdinalIgnoreCase));
+                if (sys is not null) list.AddRange(sys.Playfields.Select(x => x.Name));
+            }
+            catch { /* galaxy not readable: structures only */ }
+        }
+        return list.Where(x => !p.Exclude.Any(e => FeatureStore.MatchesPlayfield(e, x)))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>Removes game log folders and EAM logs older than <paramref name="days"/> days.</summary>

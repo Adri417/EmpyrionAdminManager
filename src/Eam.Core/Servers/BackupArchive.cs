@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Eam.Core.Servers;
 
-public sealed record BackupInfo(string File, string Name, DateTime CreatedUtc, string Kind, long Size, string? GameName, string? By, string? Note);
+public sealed record BackupInfo(string File, string Name, DateTime CreatedUtc, string Kind, long Size, string? GameName, string? By, string? Note, bool Kept = false);
 
 public sealed record BackupManifest(string App, int Format, DateTime CreatedUtc, string Kind, string Server, string? GameName,
     string? By, string? Note, List<string> Skipped);
@@ -20,7 +20,10 @@ public static class BackupArchive
     public const string ManifestName = "eam-backup.json";
     public const string Extension = ".zip";
     /// <summary>Kinds that are pruned automatically ("manual" backups stay until deleted).</summary>
-    public static readonly string[] AutomaticKinds = ["scheduled", "before-restore", "before-update", "before-wipe"];
+    public static readonly string[] AutomaticKinds = ["scheduled", "before-restore", "before-update", "before-wipe", "structures"];
+
+    /// <summary>A backup marked "keep" has a .keep file next to it and is never pruned.</summary>
+    public static string KeepMarker(string file) => Path.ChangeExtension(file, ".keep");
 
     public static string BackupsDir(ServerDefinition def) => Path.Combine(def.RootDir, "backups");
 
@@ -41,16 +44,27 @@ public static class BackupArchive
 
         var saves = SavesDir(def);
         var sources = new List<(string Path, string Entry)>();
-        if (!string.IsNullOrEmpty(gameName))
+        if (kind == "structures")
+        {
+            // Structures only: the Shared folder of the save (one folder per structure) and the save's database.
+            var shared = Path.Combine(saves, "Games", gameName ?? "", "Shared");
+            if (!string.IsNullOrEmpty(gameName) && Directory.Exists(shared)) AddTree(sources, shared, $"Saves/Games/{gameName}/Shared");
+            var gdb = Path.Combine(saves, "Games", gameName ?? "", "global.db");
+            if (!string.IsNullOrEmpty(gameName) && File.Exists(gdb)) sources.Add((gdb, $"Saves/Games/{gameName}/global.db"));
+        }
+        else if (!string.IsNullOrEmpty(gameName))
         {
             var game = Path.Combine(saves, "Games", gameName);
             if (Directory.Exists(game)) AddTree(sources, game, $"Saves/Games/{gameName}");
         }
-        var bps = Path.Combine(saves, "Blueprints");
-        if (Directory.Exists(bps)) AddTree(sources, bps, "Saves/Blueprints");
-        var admin = Path.Combine(saves, "adminconfig.yaml");
-        if (File.Exists(admin)) sources.Add((admin, "Saves/adminconfig.yaml"));
-        if (File.Exists(def.YamlFile)) sources.Add((def.YamlFile, "dedicated-eam.yaml"));
+        if (kind != "structures")
+        {
+            var bps = Path.Combine(saves, "Blueprints");
+            if (Directory.Exists(bps)) AddTree(sources, bps, "Saves/Blueprints");
+            var admin = Path.Combine(saves, "adminconfig.yaml");
+            if (File.Exists(admin)) sources.Add((admin, "Saves/adminconfig.yaml"));
+            if (File.Exists(def.YamlFile)) sources.Add((def.YamlFile, "dedicated-eam.yaml"));
+        }
 
         var total = Math.Max(1, sources.Sum(s => SafeLength(s.Path)));
         long done = 0;
@@ -120,7 +134,7 @@ public static class BackupArchive
             BackupManifest? manifest = null;
             if (m is not null) { using var s = m.Open(); manifest = JsonSerializer.Deserialize<BackupManifest>(s); }
             return new BackupInfo(file, Path.GetFileNameWithoutExtension(file), manifest?.CreatedUtc ?? fi.LastWriteTimeUtc,
-                manifest?.Kind ?? "manual", fi.Length, manifest?.GameName, manifest?.By, manifest?.Note);
+                manifest?.Kind ?? "manual", fi.Length, manifest?.GameName, manifest?.By, manifest?.Note, File.Exists(KeepMarker(file)));
         }
         catch { return null; }
     }
@@ -208,16 +222,82 @@ public static class BackupArchive
     }
 
     /// <summary>Keeps the <paramref name="keep"/> most recent automatic backups; manual ones are never pruned.</summary>
-    public static int Prune(string dir, int keep)
+    public static int Prune(string dir, int keep, int keepDays = 0)
     {
         if (!Directory.Exists(dir) || keep < 1) return 0;
-        var auto = Directory.EnumerateFiles(dir, "*" + Extension).Select(Read).OfType<BackupInfo>()
-            .Where(b => AutomaticKinds.Contains(b.Kind)).OrderByDescending(b => b.CreatedUtc).Skip(keep).ToList();
+        var all = Directory.EnumerateFiles(dir, "*" + Extension).Select(Read).OfType<BackupInfo>()
+            .Where(b => AutomaticKinds.Contains(b.Kind) && !b.Kept).OrderByDescending(b => b.CreatedUtc).ToList();
+        var auto = all.Skip(keep).ToList();
+        // Older than N days: removed too, but the most recent one always stays.
+        if (keepDays > 0) auto.AddRange(all.Skip(1).Take(keep).Where(b => DateTime.UtcNow - b.CreatedUtc > TimeSpan.FromDays(keepDays)));
         foreach (var b in auto) TryDelete(b.File);
         // Leftovers of interrupted backups.
         foreach (var t in Directory.EnumerateFiles(dir, "*.tmp"))
             if (DateTime.UtcNow - File.GetLastWriteTimeUtc(t) > TimeSpan.FromHours(12)) TryDelete(t);
         return auto.Count;
+    }
+
+    /// <summary>Structure folders (Shared\&lt;id&gt;) and player files (Players\&lt;steam&gt;.ply) inside a backup.</summary>
+    public static (List<int> Structures, List<string> Players) Contents(BackupInfo backup)
+    {
+        var structures = new HashSet<int>();
+        var players = new HashSet<string>();
+        using var zip = ZipFile.OpenRead(backup.File);
+        foreach (var e in zip.Entries)
+        {
+            var parts = e.FullName.Split('/');
+            // Saves/Games/<game>/Shared/<id>/...   Saves/Games/<game>/Players/<steam>.ply
+            if (parts.Length >= 6 && parts[0] == "Saves" && parts[1] == "Games" && parts[3] == "Shared" && int.TryParse(parts[4], out var id)) structures.Add(id);
+            if (parts.Length == 5 && parts[0] == "Saves" && parts[1] == "Games" && parts[3] == "Players" && parts[4].EndsWith(".ply", StringComparison.OrdinalIgnoreCase))
+                players.Add(Path.GetFileNameWithoutExtension(parts[4]));
+        }
+        return (structures.OrderBy(x => x).ToList(), players.OrderBy(x => x).ToList());
+    }
+
+    /// <summary>
+    /// Puts back the files of one structure (Shared\&lt;id&gt;) from a backup into the current save. Server stopped.
+    /// The current folder is moved to <paramref name="asideDir"/>. Returns the number of files written.
+    /// </summary>
+    public static int RestoreStructure(ServerDefinition def, BackupInfo backup, string gameName, int structureId, string asideDir)
+    {
+        var prefix = $"Saves/Games/{backup.GameName ?? gameName}/Shared/{structureId}/";
+        var target = Path.Combine(SavesDir(def), "Games", gameName, "Shared", structureId.ToString(CultureInfo.InvariantCulture));
+        return ExtractPrefix(backup, prefix, target, asideDir);
+    }
+
+    /// <summary>Puts back a player file from a backup (player offline).</summary>
+    public static bool RestorePlayerFile(ServerDefinition def, BackupInfo backup, string gameName, string steamId, string asideDir)
+    {
+        var entryName = $"Saves/Games/{backup.GameName ?? gameName}/Players/{steamId}.ply";
+        using var zip = ZipFile.OpenRead(backup.File);
+        var e = zip.GetEntry(entryName);
+        if (e is null) return false;
+        var dst = Path.Combine(SavesDir(def), "Games", gameName, "Players", steamId + ".ply");
+        Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+        if (File.Exists(dst)) { Directory.CreateDirectory(asideDir); File.Move(dst, Path.Combine(asideDir, Path.GetFileName(dst)), true); }
+        e.ExtractToFile(dst, overwrite: true);
+        return true;
+    }
+
+    private static int ExtractPrefix(BackupInfo backup, string prefix, string targetDir, string asideDir)
+    {
+        using var zip = ZipFile.OpenRead(backup.File);
+        var entries = zip.Entries.Where(e => e.FullName.StartsWith(prefix, StringComparison.Ordinal) && !e.FullName.EndsWith('/')).ToList();
+        if (entries.Count == 0) return 0;
+        if (Directory.Exists(targetDir))
+        {
+            Directory.CreateDirectory(asideDir);
+            Directory.Move(targetDir, Path.Combine(asideDir, Path.GetFileName(targetDir)));
+        }
+        var root = Path.GetFullPath(targetDir) + Path.DirectorySeparatorChar;
+        foreach (var e in entries)
+        {
+            var dst = Path.GetFullPath(Path.Combine(targetDir, e.FullName[prefix.Length..]));
+            if (!dst.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new IOException("backup_invalid_path");
+            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+            e.ExtractToFile(dst, overwrite: true);
+        }
+        return entries.Count;
     }
 
     private static void MoveAside(string path, List<(string, string)> aside)

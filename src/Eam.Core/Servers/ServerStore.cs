@@ -7,7 +7,7 @@ namespace Eam.Core.Servers;
 /// <summary>List of the servers managed by EAM (general database).</summary>
 public sealed class ServerStore(Database db)
 {
-    private const string Columns = "id, slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key";
+    private const string Columns = "id, slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key, game_dir";
 
     public IReadOnlyList<ServerDefinition> List()
     {
@@ -27,8 +27,8 @@ public sealed class ServerStore(Database db)
         using var c = db.Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO servers (slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key)
-            VALUES ($slug, $name, $root, $gp, $tp, $tpw, $branch, $as, $ar, $inst, $build, $created, $mk) RETURNING id;
+            INSERT INTO servers (slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key, game_dir)
+            VALUES ($slug, $name, $root, $gp, $tp, $tpw, $branch, $as, $ar, $inst, $build, $created, $mk, $gd) RETURNING id;
             """;
         Bind(cmd, s);
         cmd.Parameters.AddWithValue("$created", DateTime.UtcNow.ToString("O"));
@@ -42,7 +42,7 @@ public sealed class ServerStore(Database db)
         using var cmd = c.CreateCommand();
         cmd.CommandText = """
             UPDATE servers SET slug=$slug, name=$name, root_dir=$root, game_port=$gp, telnet_port=$tp, telnet_password=$tpw,
-              branch=$branch, auto_start=$as, auto_restart=$ar, installed=$inst, build_id=$build, mod_key=$mk WHERE id=$id;
+              branch=$branch, auto_start=$as, auto_restart=$ar, installed=$inst, build_id=$build, mod_key=$mk, game_dir=$gd WHERE id=$id;
             """;
         Bind(cmd, s);
         cmd.Parameters.AddWithValue("$id", s.Id);
@@ -73,6 +73,7 @@ public sealed class ServerStore(Database db)
         cmd.Parameters.AddWithValue("$inst", s.Installed ? 1 : 0);
         cmd.Parameters.AddWithValue("$build", (object?)s.BuildId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$mk", s.ModKey ?? "");
+        cmd.Parameters.AddWithValue("$gd", (object?)s.GameDirOverride ?? DBNull.Value);
     }
 
     private static ServerDefinition Map(SqliteDataReader r) => new()
@@ -91,5 +92,6 @@ public sealed class ServerStore(Database db)
         BuildId = r.IsDBNull(11) ? null : r.GetString(11),
         CreatedUtc = DateTime.Parse(r.GetString(12), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
         ModKey = r.GetString(13),
+        GameDirOverride = r.IsDBNull(14) ? null : r.GetString(14),
     };
 }

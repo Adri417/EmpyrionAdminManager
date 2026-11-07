@@ -24,7 +24,7 @@ extend({
     ev_draft: "Brouillon", ev_open: "Inscriptions ouvertes", ev_running: "En cours", ev_ended: "Terminé",
     ev_open_btn: "Ouvrir les inscriptions", ev_start_btn: "Démarrer", ev_end_btn: "Terminer", ev_delete_btn: "Supprimer",
     ev_confirm_start: "Démarrer « {0} » ? Les joueurs inscrits et connectés seront téléportés.", ev_confirm_end: "Terminer « {0} » ? Les joueurs seront ramenés et leur inventaire rendu.",
-    pl_registered: "inscrit", pl_in: "dans l'événement", pl_back: "revenu", pl_pending_return: "retour à la prochaine connexion",
+    evs_registered: "inscrit", evs_in: "dans l'événement", evs_back: "revenu", evs_pending_return: "retour à la prochaine connexion",
     mt_info: "État", mt_save: "Sauvegarde", mt_save_size: "Taille de la sauvegarde", mt_cache: "Cache", mt_db: "Base EAM du serveur", mt_stopped_yes: "Serveur arrêté", mt_stopped_no: "Serveur en marche",
     mt_compact: "Compacter les bases EAM", mt_compacted: "Bases compactées.",
     mt_fresh: "Nouveau départ (nouvelle saison)", mt_fresh_hint: "Efface l'historique EAM de l'ancienne partie (joueurs, structures, journal, statistiques, mineurs, événements). Les réglages, tâches et sauvegardes restent. Une sauvegarde complète est faite avant. Le serveur doit être arrêté.",
@@ -57,7 +57,7 @@ extend({
     ev_draft: "Draft", ev_open: "Registration open", ev_running: "Running", ev_ended: "Ended",
     ev_open_btn: "Open registration", ev_start_btn: "Start", ev_end_btn: "End", ev_delete_btn: "Delete",
     ev_confirm_start: "Start \"{0}\"? Registered players who are online will be teleported.", ev_confirm_end: "End \"{0}\"? Players will be brought back and get their inventory back.",
-    pl_registered: "registered", pl_in: "in the event", pl_back: "back", pl_pending_return: "back at next login",
+    evs_registered: "registered", evs_in: "in the event", evs_back: "back", evs_pending_return: "back at next login",
     mt_info: "Status", mt_save: "Save game", mt_save_size: "Save size", mt_cache: "Cache", mt_db: "Server's EAM database", mt_stopped_yes: "Server stopped", mt_stopped_no: "Server running",
     mt_compact: "Compact EAM databases", mt_compacted: "Databases compacted.",
     mt_fresh: "Fresh start (new season)", mt_fresh_hint: "Clears EAM's history of the old game (players, structures, journal, statistics, miners, events). Settings, tasks and backups stay. A full backup is made first. The server must be stopped.",
@@ -215,7 +215,7 @@ async function events(box, s) {
       ${e.state === "open" || e.state === "draft" ? html`<button class="btn small primary" data-ev="${e.id}" data-a="start">${t("ev_start_btn")}</button>` : ""}
       ${e.state === "running" ? html`<button class="btn small primary" data-ev="${e.id}" data-a="end">${t("ev_end_btn")}</button>` : ""}
       ${e.state !== "running" ? html`<button class="btn small danger" data-ev="${e.id}" data-a="delete">${t("ev_delete_btn")}</button>` : ""}</div>
-      ${e.players.length ? html`<div class="hint">${t("gp_ev_players")} : ${e.players.map((p) => `${p.name || p.steamId} (${t("pl_" + p.state)})`).join(", ")}</div>` : ""}
+      ${e.players.length ? html`<div class="hint">${t("gp_ev_players")} : ${e.players.map((p) => `${p.name || p.steamId} (${t("evs_" + p.state)})`).join(", ")}</div>` : ""}
       ${e.kit?.length ? html`<div class="hint">${t("gp_ev_kit")} : ${e.kit.map((k) => `${k.id} × ${k.count}`).join(", ")}</div>` : ""}</div>`)
     : html`<div class="hint">${t("gp_ev_none")}</div>`}</div>`);
   $("#ev-new", box).addEventListener("click", () => dialog(t("gp_new_event"), eventFields(), async (f) => { await api.post(`${base(s)}/events`, readEvent(f)); again(); }));

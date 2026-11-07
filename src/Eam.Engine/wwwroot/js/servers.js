@@ -3,6 +3,7 @@ import { t, extend, errorText } from "./i18n.js";
 import { html, raw, mount, $, $$, toast } from "./dom.js";
 import { liveEvent, fetchLive, renderLive, renderChat, playerCount, live } from "./live.js";
 import { toolsEvent, toolTabs, renderTool } from "./tools.js";
+import { importDialog } from "./importer.js";
 import { featureTabs, isFeatureTab, renderFeature, featureEvent } from "./features.js";
 
 extend({
@@ -133,7 +134,7 @@ export async function renderServerList(page) {
   const canCreate = atLeast(store.me.role, "owner");
   const draw = () => {
     mount(page, html`
-      ${canCreate ? html`<div><button class="btn primary" id="new">+ ${t("srv_new")}</button></div>` : ""}
+      ${canCreate ? html`<div><button class="btn primary" id="new">+ ${t("srv_new")}</button> <button class="btn" id="imp">⇪ ${t("imp_button")}</button></div>` : ""}
       ${store.servers.length === 0
         ? html`<div class="card"><div class="empty"><div class="big">▣</div><b>${t("servers_empty_title")}</b><div>${t("no_server_yet")}</div></div></div>`
         : html`<div class="grid servers">${store.servers.map((s) => html`
@@ -145,6 +146,7 @@ export async function renderServerList(page) {
           </a>`)}</div>`}`);
     applyBars(page);
     $("#new", page)?.addEventListener("click", () => createDialog());
+    $("#imp", page)?.addEventListener("click", () => importDialog(store.servers));
   };
   store.onChange = draw;
   draw();

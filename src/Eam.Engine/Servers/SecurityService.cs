@@ -171,7 +171,7 @@ public sealed class SecurityService : BackgroundService
             var text = $"{label}: {string.Join(", ", reasons.Select(r => r.Text).Distinct().Take(10))}";
             await _alerts.RaiseAsync(def, "cheat", level >= 3 ? 2 : level == 2 ? 1 : 0, text, steam, p.Name, p.Playfield);
             found.Add(new { p.Name, steamId = steam, level = label, reasons = reasons.Select(r => r.Text).Distinct().ToList() });
-            if (level >= 3 && s.AutoBanExtreme)
+            if (level >= 3 && s.AutoBanExtreme && !data.Meta(steam).BanExempt)
             {
                 await _manager.ConsoleAsync(def.Id, $"ban {steam} {s.AutoBanDuration}", "EAM anti-cheat");
                 data.PlayerEvent(steam, p.Name, "admin_ban", $"{s.AutoBanDuration} (anti-cheat: {text})", "EAM");

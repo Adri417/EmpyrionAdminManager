@@ -3,6 +3,8 @@ import { t, setLanguage, errorText } from "./i18n.js";
 import { html, raw, mount, $, $$, toast, formatBytes, timeSpanSeconds } from "./dom.js";
 import { initServers, serverEvent, loadServers, renderServerList, renderServerDetail, dashboardServers, setServersListener } from "./servers.js";
 import { playerCount } from "./live.js";
+import "./more.js";
+import { initUpdateBanner, renderUpdateSettings } from "./updater.js";
 
 const app = document.getElementById("app");
 const state = { status: null, me: null, socket: null, system: null };
@@ -113,7 +115,7 @@ function showShell() {
     .map(([id, p]) => html`<a href="#/${id}" data-page="${id}"><span class="ico">${p.icon}</span>${t(p.label)}${p.soon ? html`<span class="soon">${t("soon")}</span>` : ""}</a>`);
   mount(app, html`
     <div class="shell">
-      <aside class="side">${brand()}<nav class="nav">${nav}</nav>
+      <aside class="side">${brand()}<div id="upd"></div><nav class="nav">${nav}</nav>
         <div class="side-foot">v${state.status.version}</div></aside>
       <div class="main">
         <header class="top">
@@ -130,6 +132,7 @@ function showShell() {
     state.me = null; closeSocket(); showLogin();
   });
   initServers(state.me);
+  initUpdateBanner(state.me);
   openSocket();
   route();
 }
@@ -340,7 +343,8 @@ async function renderSettings(page) {
     <div class="hint">${t("le_hint")}</div>
     ${s.letsEncryptStatus?.expiresUtc ? html`<div class="hint">${t("le_valid", new Date(s.letsEncryptStatus.expiresUtc).toLocaleDateString())}</div>` : ""}
     ${s.letsEncryptStatus?.error ? html`<div class="error">${t("le_error", s.letsEncryptStatus.error)}</div>` : ""}
-    <button class="btn primary block" type="submit">${t("save")}</button></form>`);
+    <button class="btn primary block" type="submit">${t("save")}</button></form><div id="upd-settings"></div>`);
+  renderUpdateSettings($("#upd-settings", page));
   $("#sf").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target;

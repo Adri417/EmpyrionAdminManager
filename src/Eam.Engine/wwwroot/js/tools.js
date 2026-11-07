@@ -208,24 +208,32 @@ async function renderPlayers(el, s, me) {
   let list = [];
   const draw = () => {
     const q = filter.toLowerCase();
-    const shown = list.filter((p) => !q || p.name.toLowerCase().includes(q) || p.steamId.includes(q));
+    const shown = list.filter((p) => !q || p.name.toLowerCase().includes(q) || p.steamId.includes(q))
+      .sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
     const tbody = $("#pl-body", el);
     if (!tbody) return;
-    mount(tbody, html`${shown.map((p) => html`<tr class="clickable" data-steam="${p.steamId}">
-      <td><b>${p.name}</b><div class="hint">${p.steamId}</div></td>
+    mount(tbody, html`${shown.map((p) => html`<tr class="clickable ${p.online ? "row-online" : ""}" data-steam="${p.steamId}">
+      <td><b>${p.name}</b>${p.marked ? html`<span class="mark" title="${t("pm_marked")}">★</span>` : ""}<div class="hint">${p.steamId}</div></td>
       <td>${p.online ? html`<span class="state ok">${t("pl_online")}</span> <span class="hint">${p.playfield || ""}</span>` : html`<span class="hint">${when(p.lastSeenUtc)}</span>`}</td>
       <td>${t("role_" + p.role)}</td><td>${duration(p.playtimeSeconds)}</td></tr>`)}`);
     $$("tr[data-steam]", tbody).forEach((tr) => tr.addEventListener("click", () => renderPlayer(el, s, me, tr.dataset.steam, () => renderPlayers(el, s, me))));
   };
   mount(el, html`<div class="card">
     <div class="actions-row"><input id="pl-q" type="search" placeholder="${t("pl_search")}" autocomplete="off">
-      <button class="btn" id="pl-banned">${t("pl_banned")}</button></div>
+      <button class="btn" id="pl-banned">${t("pl_banned")}</button>
+      ${atLeast(me.role, "gamemaster") ? html`<button class="btn" id="pl-inv">${t("ih_all")}</button>` : ""}
+      ${atLeast(me.role, "moderator") ? html`<button class="btn danger" id="pl-kickall">${t("pm_kick_all")}</button>` : ""}</div>
+    <div class="hint" id="pl-count"></div>
     <div class="table-wrap"><table><thead><tr><th>${t("col_name")}</th><th>${t("pl_seen")}</th><th>${t("pl_role")}</th><th>${t("pl_playtime")}</th></tr></thead>
     <tbody id="pl-body"></tbody></table></div><div id="pl-empty"></div></div>`);
   $("#pl-q", el).addEventListener("input", (e) => { filter = e.target.value; draw(); });
   $("#pl-banned", el).addEventListener("click", () => bannedDialog(s));
+  $("#pl-inv", el)?.addEventListener("click", () => inventoryHistoryDialog(s, null, me));
+  $("#pl-kickall", el)?.addEventListener("click", () => dialog(t("pm_kick_all"), html`<label>${t("kick_reason")}</label><input name="reason" maxlength="120">`,
+    async (f) => { const r = await api.post(`/api/servers/${s.id}/players/kick-all`, { name: f.reason.value || "Server maintenance" }); toast(t("pm_kicked", r.kicked)); }, t("a_kick"), true));
   try { list = await api.get(`/api/servers/${s.id}/players`); } catch (ex) { fail(ex); }
   if (!list.length) mount($("#pl-empty", el), html`<div class="hint">${t("pl_none")}</div>`);
+  else $("#pl-count", el).textContent = t("pm_count", list.filter((p) => p.online).length, list.length);
   draw();
 }
 
@@ -262,6 +270,9 @@ async function renderPlayer(el, s, me, steamId, back) {
     ["unban", "a_unban", "moderator", false], ["credits", "a_credits", "gamemaster", true], ["progress", "a_progress", "gamemaster", true],
     ["item", "a_item", "gamemaster", true], ["teleport", "a_teleport", "gamemaster", true], ["heal", "a_heal", "gamemaster", true],
     ["bp", "a_bp", "gamemaster", true], ["role", "a_role", "admin", false],
+    ["god", p.meta?.god ? "pm_god_off" : "pm_god_on", "gamemaster", false], ["tp_more", "pm_tp_more", "gamemaster", true],
+    ["faction", "pm_faction", "admin", true], ["bp_res", "pm_bp_res", "gamemaster", true], ["survival", "pm_survival_reset", "gamemaster", false],
+    ["playtime", "pm_playtime_reset", "admin", false], ["files", "pm_files", "admin", false], ["impersonate", "pm_impersonate", "admin", true],
   ].filter(([, , role, needsOnline]) => atLeast(me.role, role) && (!needsOnline || p.online));
 
   mount(el, html`<div class="card">
@@ -282,6 +293,20 @@ async function renderPlayer(el, s, me, steamId, back) {
     ${p.liveError ? html`<div class="error">${errorText(p.liveError)}</div>` : ""}
     <div class="actions-row wrap">${buttons.map(([a, label]) => html`<button class="btn" data-a="${a}">${t(label)}</button>`)}</div>
   </div>
+  <div class="card"><h3>${t("pm_notes")}</h3>
+    <textarea id="pm-note" rows="2" maxlength="2000" ${raw(atLeast(me.role, "moderator") ? "" : "disabled")}>${p.meta?.note ?? ""}</textarea>
+    <div class="actions-row wrap"><label class="check"><input type="checkbox" id="pm-marked" ${raw(p.meta?.marked ? "checked" : "")}> ${t("pm_marked")}</label>
+      <label class="check"><input type="checkbox" id="pm-exempt" ${raw(p.meta?.banExempt ? "checked" : "")}> ${t("pm_exempt")}</label>
+      ${p.meta?.god ? html`<span class="state ok">${t("pm_god")}</span>` : ""}
+      ${atLeast(me.role, "moderator") ? html`<button class="btn small" id="pm-save">${t("save")}</button>` : ""}</div></div>
+  ${atLeast(me.role, "gamemaster") ? html`<div class="card"><h3>${t("ih_title")}</h3><div class="hint">${t("ih_hint")}</div>
+    <div class="actions-row wrap">${p.online ? html`<button class="btn" id="ih-now">${t("ih_now")}</button>` : ""}
+      ${admin && p.online ? html`<button class="btn" id="ih-tpl-load">${t("ih_tpl_load")}</button><button class="btn" id="ih-tpl-save">${t("ih_tpl_save")}</button>` : ""}</div>
+    ${p.inventories?.length ? html`<div class="table-wrap"><table><tbody>${p.inventories.map((x) => html`<tr>
+      <td>${when(x.utc)}</td><td><span class="badge">${t("ih_r_" + x.reason) === "ih_r_" + x.reason ? x.reason : t("ih_r_" + x.reason)}</span></td>
+      <td>${x.playfield || ""}</td><td>${t("ih_items", x.items)}</td>
+      <td class="actions-row"><button class="btn small" data-ih-view="${x.id}">${t("ih_view")}</button></td></tr>`)}</tbody></table></div>`
+      : html`<div class="hint">${t("ih_none")}</div>`}</div>` : ""}
   ${inv ? html`<div class="card"><h3>${t("pl_inventory")}</h3>
     <h4>${t("pl_toolbelt")}</h4><div class="table-wrap"><table><tbody id="inv-toolbelt">${stackRows("toolbelt")}</tbody></table></div>
     <h4>${t("pl_bag")}</h4><div class="table-wrap"><table><tbody id="inv-bag">${stackRows("bag")}</tbody></table></div>
@@ -293,6 +318,17 @@ async function renderPlayer(el, s, me, steamId, back) {
     <span class="chat-time">${when(m.utc)}</span><span class="badge">${m.channel}</span> <span class="chat-text">${m.text}</span></div>`)}</div></div>`);
 
   $("#pl-back", el).addEventListener("click", back);
+  $("#pm-save", el)?.addEventListener("click", () => act("meta", { note: $("#pm-note", el).value, marked: $("#pm-marked", el).checked, banExempt: $("#pm-exempt", el).checked }).catch(fail));
+  $("#ih-now", el)?.addEventListener("click", () => act("inventory_snapshot").catch(fail));
+  $$("[data-ih-view]", el).forEach((b) => b.addEventListener("click", () => snapshotDialog(s, +b.dataset.ihView, steamId, p.online, admin, catalog.length ? catalog : null, () => renderPlayer(el, s, me, steamId, back))));
+  $("#ih-tpl-save", el)?.addEventListener("click", () => dialog(t("ih_tpl_save"), html`<label>${t("col_name")}</label><input name="n" maxlength="40" required autofocus>`,
+    (f) => act("inventory_template_save", { name: f.n.value })));
+  $("#ih-tpl-load", el)?.addEventListener("click", async () => {
+    let tpls = [];
+    try { tpls = await api.get(`/api/servers/${s.id}/inventory-templates`); } catch (ex) { fail(ex); return; }
+    dialog(t("ih_tpl_load"), tpls.length ? html`<select name="n">${tpls.map((x) => html`<option>${x.name}</option>`)}</select><div class="hint">${t("ih_replace_hint")}</div>`
+      : html`<div class="hint">${t("ih_tpl_none")}</div>`, (f) => (tpls.length ? act("inventory_template_load", { name: f.n.value }) : true), t("ih_restore"));
+  });
   const markDirty = () => { invDirty = true; const b = $("#inv-save", el); if (b) b.disabled = false; };
   $$("[data-inv]", el).forEach((i) => i.addEventListener("change", () => { inv[i.dataset.inv][+i.dataset.i].count = Math.max(1, +i.value || 1); markDirty(); }));
   $$("[data-rm]", el).forEach((b) => b.addEventListener("click", () => {
@@ -346,11 +382,96 @@ async function renderPlayer(el, s, me, steamId, back) {
       (f) => act("teleport", { playfield: f.pf.value, x: +f.x.value, y: +f.y.value, z: +f.z.value })),
     heal: () => act("heal").catch(fail),
     bp: () => act("bp_finish").catch(fail),
+    god: () => act("god", { on: !p.meta?.god }).catch(fail),
+    survival: () => act("survival_reset").catch(fail),
+    playtime: () => act("playtime_reset").catch(fail),
+    tp_more: async () => {
+      let positions = [];
+      try { positions = await api.get(`/api/servers/${s.id}/positions`); } catch { }
+      dialog(t("pm_tp_more"), html`<label>${t("pm_tp_kind")}</label><select name="k">
+          <option value="pos">${t("pm_tp_pos")}</option><option value="player">${t("pm_tp_player")}</option><option value="structure">${t("pm_tp_structure")}</option></select>
+        <label>${t("pm_tp_pos")}</label><select name="pos">${positions.map((x) => html`<option>${x.name}</option>`)}</select>
+        <label>${t("pm_tp_target")}</label><input name="target" placeholder="SteamID / ${t("pm_tp_structure")} #">
+        <div class="hint">${t("pm_tp_hint")}</div>`,
+        (f) => f.k.value === "pos" ? act("teleport_position", { name: f.pos.value })
+          : f.k.value === "player" ? act("teleport_to_player", { target: f.target.value.trim() })
+          : act("teleport_to_structure", { structureId: +f.target.value }));
+    },
+    faction: () => dialog(t("pm_faction"), html`<div class="form-row"><div><label>${t("pm_fgroup")}</label><input name="fg" type="number" min="0" max="255" value="${info?.factionGroup ?? ""}"></div>
+      <div><label>${t("pm_fid")}</label><input name="fid" type="number" min="0" value="${info?.factionId ?? ""}"></div></div>
+      <div class="form-row"><div><label>${t("pm_origin")}</label><input name="origin" type="number" min="0" max="255" value="${info?.origin ?? ""}"></div>
+      <div><label>${t("pm_start_pf")}</label><input name="spf" value="${info?.startPlayfield ?? ""}"></div></div>`,
+      (f) => act("player_set", { factionGroup: f.fg.value === "" ? null : +f.fg.value, factionId: f.fid.value === "" ? null : +f.fid.value,
+        origin: f.origin.value === "" ? null : +f.origin.value, startPlayfield: f.spf.value || null })),
+    bp_res: () => dialog(t("pm_bp_res"), html`<label>${t("pm_bp_items")}</label><textarea name="items" rows="4" placeholder="4297 x 100&#10;4298 x 50"></textarea>
+      <label class="check"><input type="checkbox" name="replace"> ${t("pm_bp_replace")}</label>`,
+      (f) => act("bp_resources", { replace: f.replace.checked, items: f.items.value.split("\n").map((l) => l.match(/(\d+)\s*(?:x|\*|×)?\s*(\d+)?/)).filter(Boolean)
+        .map((m) => ({ id: +m[1], count: +(m[2] || 1), slot: 0, ammo: 0, decay: 0 })) })),
+    files: () => {
+      const dlg = dialog(t("pm_files"), html`<div class="hint">${t("pm_files_hint")}</div>
+        <div class="actions-row wrap"><button type="button" class="btn" data-f="save">${t("pm_file_save")}</button>
+        <button type="button" class="btn danger" data-f="reset">${t("pm_file_reset")}</button></div>
+        ${p.saves?.length ? html`<div class="table-wrap"><table><tbody>${p.saves.map((x) => html`<tr><td>${x.file}</td><td>${formatBytes(x.size)}</td>
+          <td><button type="button" class="btn small" data-load="${x.file}">${t("pm_file_load")}</button></td></tr>`)}</tbody></table></div>` : ""}`, () => true, "OK");
+      $$("[data-f]", dlg).forEach((b) => b.addEventListener("click", () => {
+        if (b.dataset.f === "reset" && !confirm(t("pm_reset_confirm"))) return;
+        dlg.close(); act(b.dataset.f === "save" ? "save_file" : "reset").catch(fail);
+      }));
+      $$("[data-load]", dlg).forEach((b) => b.addEventListener("click", () => { dlg.close(); act("load_file", { name: b.dataset.load }).catch(fail); }));
+    },
+    impersonate: () => dialog(t("pm_impersonate"), html`<div class="hint">${t("pm_imp_hint")}</div>
+      <label>${t("pm_imp_mode")}</label><select name="m"><option value="impersonate">${t("pm_imp_start")}</option><option value="impersonate_end">${t("pm_imp_end")}</option></select>`,
+      (f) => act(f.m.value)),
     role: () => dialog(t("a_role"), html`<select name="perm">${[[0, "player"], [3, "gamemaster"], [6, "moderator"], [9, "admin"]].map(([v, r]) =>
         html`<option value="${v}" ${raw(v === p.permission ? "selected" : "")}>${t("role_" + r)}</option>`)}</select><div class="hint">${t("role_hint")}</div>`,
       (f) => act("role", { permission: +f.perm.value })),
   };
   $$("[data-a]", el).forEach((b) => b.addEventListener("click", () => handlers[b.dataset.a]()));
+}
+
+// =================================================================== inventory history (0.9.5)
+function stacksTable(list, catalog) {
+  return html`<div class="inv-grid">${(list || []).map((x) => html`<div>${catalog ? itemLabel(catalog, x.id) : "#" + x.id} <b>× ${x.count}</b></div>`)}</div>`;
+}
+
+async function snapshotDialog(s, snapId, steamId, online, admin, catalog, done) {
+  let list = [];
+  try { list = await api.get(`/api/servers/${s.id}/inventories?steamId=${steamId}`); } catch (ex) { fail(ex); return; }
+  const x = list.find((i) => i.id === snapId);
+  if (!x) return;
+  const act = async (action, body) => {
+    await api.post(`/api/servers/${s.id}/players/${steamId}/action`, { action, snapshotId: snapId, ...body });
+    toast(t("done"));
+    done?.();
+  };
+  const dlg = dialog(`${x.name} · ${when(x.utc)}`, html`<div class="hint">${t("ih_r_" + x.reason)}${x.playfield ? " · " + x.playfield : ""}</div>
+    <h4>${t("pl_toolbelt")}</h4>${stacksTable(x.toolbelt, catalog)}<h4>${t("pl_bag")}</h4>${stacksTable(x.bag, catalog)}
+    ${admin ? html`<div class="actions-row wrap">
+      ${online ? html`<button type="button" class="btn primary" data-r="replace">${t("ih_restore")}</button>
+        <button type="button" class="btn" data-r="add">${t("ih_give")}</button>` : html`<div class="hint">${t("ih_offline")}</div>`}
+      <button type="button" class="btn" data-r="keep">${x.reason === "kept" ? t("ih_unkeep") : t("ih_keep")}</button></div>
+      <div class="hint">${t("ih_replace_hint")}</div>` : ""}`, () => true, "OK", false);
+  $$("[data-r]", dlg).forEach((b) => b.addEventListener("click", async () => {
+    try {
+      if (b.dataset.r === "keep") await act("inventory_keep", { on: x.reason !== "kept" });
+      else await act("inventory_restore", { replace: b.dataset.r === "replace" });
+      dlg.close();
+    } catch (ex) { fail(ex); }
+  }));
+}
+
+async function inventoryHistoryDialog(s, steamId, me) {
+  let list = [];
+  try { list = await api.get(`/api/servers/${s.id}/inventories?reason=death`); } catch (ex) { fail(ex); return; }
+  const dlg = dialog(t("ih_deaths"), html`<div class="hint">${t("ih_deaths_hint")}</div>
+    ${list.length ? html`<div class="table-wrap"><table><tbody>${list.map((x) => html`<tr><td><b>${x.name}</b></td><td>${when(x.utc)}</td><td>${x.playfield || ""}</td>
+      <td>${t("ih_items", (x.toolbelt?.length || 0) + (x.bag?.length || 0))}</td><td><button type="button" class="btn small" data-v="${x.id}" data-s="${x.steamId}">${t("ih_view")}</button></td></tr>`)}</tbody></table></div>`
+      : html`<div class="hint">${t("ih_none")}</div>`}`, () => true, "OK");
+  const online = await api.get(`/api/servers/${s.id}/players`).catch(() => []);
+  $$("[data-v]", dlg).forEach((b) => b.addEventListener("click", () => {
+    dlg.close();
+    snapshotDialog(s, +b.dataset.v, b.dataset.s, online.some((p) => p.steamId === b.dataset.s && p.online), atLeast(me.role, "admin"), null);
+  }));
 }
 
 // =================================================================== backups
@@ -364,16 +485,19 @@ async function renderBackups(el, s, me) {
     const owner = atLeast(me.role, "owner");
     mount(el, html`<div class="card">
       <div class="actions-row"><input id="bk-note" maxlength="200" placeholder="${t("bk_note")}">
-        <button class="btn primary" id="bk-create" ${raw(data.running ? "disabled" : "")}>${t("bk_create")}</button></div>
+        <button class="btn primary" id="bk-create" ${raw(data.running ? "disabled" : "")}>${t("bk_create")}</button>
+        <button class="btn" id="bk-create-st" ${raw(data.running ? "disabled" : "")}>${t("bk_structures")}</button></div>
       ${data.running || pct != null ? html`<div class="hint">${t("bk_running")} ${pct != null ? `${pct} %` : ""}</div><div class="bar"><i data-pct="${pct ?? 0}"></i></div>` : ""}
       </div>
       <div class="card"><h3>${t("bk_list")}</h3>
       ${data.list.length ? html`<div class="table-wrap"><table><tbody>${data.list.map((b) => html`<tr>
         <td><b>${when(b.createdUtc)}</b><div class="hint">${b.name}</div></td>
-        <td><span class="badge">${t("bk_kind_" + b.kind)}</span>${b.note ? html`<div class="hint">${b.note}</div>` : ""}${b.by ? html`<div class="hint">${b.by}</div>` : ""}</td>
+        <td><span class="badge">${t("bk_kind_" + b.kind) === "bk_kind_" + b.kind ? b.kind : t("bk_kind_" + b.kind)}</span>${b.kept ? html` <span class="badge">${t("bk_kept")}</span>` : ""}${b.note ? html`<div class="hint">${b.note}</div>` : ""}${b.by ? html`<div class="hint">${b.by}</div>` : ""}</td>
         <td>${formatBytes(b.size)}</td>
         <td class="row-actions"><a class="btn small" href="/api/servers/${s.id}/backups/download?name=${encodeURIComponent(b.name)}" download>${t("bk_download")}</a>
           ${owner ? html`<button class="btn small" data-restore="${b.name}">${t("bk_restore")}</button>` : ""}
+          <button class="btn small" data-part="${b.name}">${t("bk_part")}</button>
+          <button class="btn small" data-keep="${b.name}" data-kept="${b.kept ? 1 : 0}">${b.kept ? t("ih_unkeep") : t("ih_keep")}</button>
           <button class="btn small danger" data-del="${b.name}">${t("act_delete")}</button></td></tr>`)}</tbody></table></div>`
         : html`<div class="hint">${t("bk_none")}</div>`}
       <div class="hint">${t("bk_auto_hint")}</div></div>
@@ -382,11 +506,34 @@ async function renderBackups(el, s, me) {
         <label>${t("bk_copy")}</label><input name="copyDir" value="${data.settings.copyDir ?? ""}" placeholder="D:\\OneDrive\\Empyrion">
         <div class="hint">${t("bk_copy_hint")}</div>
         <label>${t("bk_copy_keep")}</label><input name="copyKeep" type="number" min="1" max="500" value="${data.settings.copyKeep}">
+        <label>${t("bk_keep_days")}</label><input name="keepDays" type="number" min="0" max="3650" value="${data.settings.keepDays ?? 0}">
+        <label>${t("bk_min_free")}</label><input name="minFreeGb" type="number" min="0" max="10000" value="${data.settings.minFreeGb ?? 10}">
         <button class="btn primary">${t("save")}</button></form>`);
     $$(".bar > i[data-pct]", el).forEach((i) => { i.style.width = `${i.dataset.pct}%`; });
     $("#bk-create", el).addEventListener("click", async () => {
       try { await api.post(`/api/servers/${s.id}/backups`, { note: $("#bk-note", el).value }); data.running = true; draw(0); } catch (ex) { fail(ex); }
     });
+    $("#bk-create-st", el).addEventListener("click", async () => {
+      try { await api.post(`/api/servers/${s.id}/backups`, { note: $("#bk-note", el).value, kind: "structures" }); data.running = true; draw(0); } catch (ex) { fail(ex); }
+    });
+    $$("[data-keep]", el).forEach((b) => b.addEventListener("click", async () => {
+      try { await api.post(`/api/servers/${s.id}/backups/keep`, { name: b.dataset.keep, keep: b.dataset.kept !== "1" }); load(); } catch (ex) { fail(ex); }
+    }));
+    $$("[data-part]", el).forEach((b) => b.addEventListener("click", async () => {
+      let c;
+      try { c = await api.get(`/api/servers/${s.id}/backups/contents?name=${encodeURIComponent(b.dataset.part)}`); } catch (ex) { fail(ex); return; }
+      dialog(`${t("bk_part")} · ${b.dataset.part}`, html`<div class="hint">${t("bk_part_hint")}</div>
+        <label>${t("bk_part_structures")}</label><input name="st" placeholder="1234, 5678" list="bk-st">
+        <datalist id="bk-st">${(c.structures || []).map((x) => html`<option value="${x.id}">${x.name || "?"} ${x.type} ${x.playfield || ""}${x.removed ? " ✝" : ""}</option>`)}</datalist>
+        <div class="hint">${t("bk_part_count", (c.structures || []).length)}</div>
+        <label>${t("bk_part_player")}</label><select name="pl"><option value="">—</option>${(c.players || []).map((x) => html`<option value="${x.steamId}">${x.name || x.steamId}</option>`)}</select>`,
+        async (f) => {
+          const structures = f.st.value.split(/[,;\s]+/).filter(Boolean).map(Number).filter((n) => n > 0);
+          if (!structures.length && !f.pl.value) return false;
+          await api.post(`/api/servers/${s.id}/backups/restore-part`, { name: b.dataset.part, structures, steamId: f.pl.value || null });
+          toast(t("bk_restored"));
+        }, t("bk_restore"), true);
+    }));
     $$("[data-del]", el).forEach((b) => b.addEventListener("click", async () => {
       if (!confirm(`${t("act_delete")} ${b.dataset.del} ?`)) return;
       try { await api.post(`/api/servers/${s.id}/backups/delete`, { name: b.dataset.del }); load(); } catch (ex) { fail(ex); }
@@ -404,7 +551,8 @@ async function renderBackups(el, s, me) {
       e.preventDefault();
       const f = e.target;
       try {
-        await api.put(`/api/servers/${s.id}/backups/settings`, { keep: +f.keep.value, copyDir: f.copyDir.value, copyKeep: +f.copyKeep.value });
+        await api.put(`/api/servers/${s.id}/backups/settings`, { keep: +f.keep.value, copyDir: f.copyDir.value, copyKeep: +f.copyKeep.value,
+          keepDays: +f.keepDays.value, minFreeGb: +f.minFreeGb.value });
         toast(t("saved"));
       } catch (ex) { fail(ex); }
     });
@@ -421,7 +569,8 @@ async function renderBackups(el, s, me) {
 }
 
 // =================================================================== scheduler
-const KINDS = ["restart", "backup", "message", "command", "wipe", "stop", "start", "update", "cleanup"];
+const KINDS = ["restart", "backup", "message", "command", "wipe", "stop", "start", "update", "cleanup",
+  "sequence", "backup_structures", "shared_cleanup", "limits", "cleanup_players", "cleanup_inventories"];
 
 function describeSchedule(sc) {
   if (sc.type === "interval") return t("every_min", sc.minutes);
@@ -476,7 +625,9 @@ function taskSummary(x) {
   const p = x.params || {};
   if (x.kind === "message") return p.text;
   if (x.kind === "command") return p.command;
-  if (x.kind === "wipe") return `${t("w_" + p.wipe)} : ${(p.playfields || []).join(", ")}`;
+  if (x.kind === "wipe") return `${t("w_" + p.wipe)} : ${p.solarSystem ? "☀ " + p.solarSystem : (p.playfields || []).join(", ")}${p.exclude?.length ? " − " + p.exclude.join(", ") : ""}`;
+  if (x.kind === "sequence") return (p.steps || []).map((st) => t("k_" + st.kind) + (st.delaySeconds ? ` +${st.delaySeconds}s` : "")).join(" → ");
+  if (["cleanup_players", "cleanup_inventories"].includes(x.kind)) return t("sc_days_n", p.days ?? 90);
   if (["restart", "stop", "update"].includes(x.kind)) return `${p.warnMinutes} min${p.backupFirst ? ` · ${t("p_backup_first")}` : ""}`;
   return "";
 }
@@ -501,7 +652,12 @@ function taskDialog(s, x, done) {
     <div data-for="command"><label>${t("p_command")}</label><input name="command" maxlength="500" value="${p.command ?? ""}"></div>
     <div data-for="wipe"><label>${t("p_playfields")}</label><input name="playfields" value="${(p.playfields || []).join(", ")}">
       <label>${t("p_wipe")}</label><select name="wipe">${["poi", "deposit", "terrain", "all"].map((w) => html`<option value="${w}" ${raw(p.wipe === w ? "selected" : "")}>${t("w_" + w)}</option>`)}</select>
-      <div class="hint">${t("wipe_hint")}</div></div>
+      <div class="hint">${t("wipe_hint")} ${t("sc_all_hint")}</div>
+      <label>${t("sc_solar")}</label><input name="solarSystem" value="${p.solarSystem ?? ""}">
+      <label>${t("sc_exclude")}</label><input name="exclude" value="${(p.exclude || []).join(", ")}"></div>
+    <div data-for="cleanup_players cleanup_inventories"><label>${t("sc_days_old")}</label><input name="days" type="number" min="1" max="3650" value="${p.days ?? 90}"></div>
+    <div data-for="sequence"><label>${t("sc_steps")}</label><textarea name="steps" rows="4" placeholder="message 0&#10;backup 60&#10;restart 300">${(p.steps || []).map((st) => `${st.kind} ${st.delaySeconds || 0}`).join("\n")}</textarea>
+      <div class="hint">${t("sc_steps_hint")}</div></div>
     <div data-for="cleanup"><label>${t("p_log_days")}</label><input name="logDays" type="number" min="1" max="365" value="${p.logDays ?? 14}"></div>
     <label class="check"><input type="checkbox" name="enabled" ${raw(x?.enabled === false ? "" : "checked")}> ${t("sc_enabled")}</label>`,
   async (f) => {
@@ -512,8 +668,14 @@ function taskDialog(s, x, done) {
       params: {
         warnMinutes: +f.warn.value, message: f.message.value || null, backupFirst: f.backupFirst.checked, text: f.text.value, mode: f.mode.value,
         command: f.command.value, playfields: f.playfields.value.split(",").map((v) => v.trim()).filter(Boolean), wipe: f.wipe.value, logDays: +f.logDays.value,
+        solarSystem: f.solarSystem.value.trim() || null, exclude: f.exclude.value.split(",").map((v) => v.trim()).filter(Boolean), days: +f.days.value || 90,
       },
     };
+    if (body.kind === "sequence") {
+      const shared = { ...body.params };
+      body.params.steps = f.steps.value.split("\n").map((l) => l.trim().split(/\s+/)).filter((a) => a[0])
+        .map(([kind, delay]) => ({ kind, delaySeconds: +delay || 0, params: shared }));
+    }
     if (x) await api.put(`/api/servers/${s.id}/tasks/${x.id}`, body); else await api.post(`/api/servers/${s.id}/tasks`, body);
     done();
   });

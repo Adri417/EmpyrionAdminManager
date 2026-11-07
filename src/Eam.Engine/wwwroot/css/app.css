@@ -237,3 +237,14 @@ svg.chart .serie { stroke-width: 1.6; }
 .card.inner { margin: 8px 0; padding: 10px 12px; box-shadow: none; }
 textarea.mono, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 13px; width: 100%; }
 label.btn.disabled { opacity: .5; pointer-events: none; }
+
+/* 0.9.5: online players stand out in the list */
+tr.row-online td { background: color-mix(in srgb, var(--ok) 9%, transparent); }
+tr.row-online td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+tr.row-online { outline: 1px solid color-mix(in srgb, var(--ok) 55%, transparent); outline-offset: -1px; }
+.mark { color: var(--accent-2); margin-left: 4px; }
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 12px; font-size: 13px; }
+.update-banner { margin: 8px 12px; padding: 10px 12px; border: 1px solid var(--accent-2); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent); font-size: 13px; }
+.update-banner b { display: block; color: var(--accent-2); }
+.update-banner .btn { margin-top: 6px; width: 100%; }

@@ -80,6 +80,10 @@ public sealed class Database
         """
         ALTER TABLE servers ADD COLUMN mod_key TEXT NOT NULL DEFAULT '';
         """,
+        // 4: an existing Empyrion folder used in place (server imported from another tool)
+        """
+        ALTER TABLE servers ADD COLUMN game_dir TEXT NULL;
+        """,
     ];
 
     public void Migrate()

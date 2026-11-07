@@ -8,7 +8,7 @@ namespace Eam.Engine.Servers;
 
 public sealed record StructureActionRequest(
     string Action, string? Name, string? Playfield, double? X, double? Y, double? Z, string? ToPlayer,
-    string? Faction, bool? SaveFirst, string? Note);
+    string? Faction, bool? SaveFirst, string? Note, string? AdminSteamId = null);
 
 public sealed record SpawnRequest(string Source, string Name, string Playfield, double X, double Y, double Z, int? Type,
     int? FactionGroup, int? FactionId, string? NewName);
@@ -245,6 +245,29 @@ public sealed class WorldService : BackgroundService
                 var newId = await SpawnFromFileAsync(id, file, string.IsNullOrWhiteSpace(r.Playfield) ? s.Playfield : r.Playfield.Trim(),
                     r.X ?? s.X + 60, r.Y ?? s.Y + 20, r.Z ?? s.Z + 60, s.Type, s.FactionGroup, s.FactionId, string.IsNullOrWhiteSpace(r.Name) ? s.Name + " (copy)" : r.Name.Trim());
                 detail = $"→ {newId}";
+                result = new { id = newId };
+                break;
+            }
+            case "goto":
+            {
+                // The admin's own character (Steam ID of their EAM account) goes next to the structure.
+                var me = _live.OnlineBySteam(id, r.AdminSteamId ?? "") ?? throw new ServerException("admin_not_in_game");
+                var req = new Dictionary<string, object?> { ["op"] = "teleport", ["id"] = me.Id, ["x"] = s.X + 10, ["y"] = s.Y + 15, ["z"] = s.Z + 10 };
+                if (!string.Equals(s.Playfield, me.Playfield, StringComparison.OrdinalIgnoreCase)) req["pf"] = s.Playfield;
+                await _live.RequestAsync(id, req, TimeSpan.FromSeconds(60));
+                detail = me.Name;
+                break;
+            }
+            case "owner_restore":
+            {
+                // Given back to the owner it had before the last change: copied with that owner, then the current one removed.
+                var prev = data.PreviousOwner(structureId) ?? throw new ServerException("no_previous_owner");
+                var parts = prev.Split(':');
+                if (parts.Length != 2 || !int.TryParse(parts[0], out var fg) || !int.TryParse(parts[1], out var fid)) throw new ServerException("no_previous_owner");
+                var file = await ExportAsync(def, s, by, "owner restore");
+                var newId = await SpawnFromFileAsync(id, file, s.Playfield, s.X, s.Y, s.Z, s.Type, fg, fid, s.Name);
+                await _live.RequestAsync(id, new() { ["op"] = "destroy", ["id"] = structureId }, TimeSpan.FromSeconds(30));
+                detail = $"{s.FactionGroup}:{s.FactionId} → {prev} (new id {newId})";
                 result = new { id = newId };
                 break;
             }
@@ -496,7 +519,7 @@ public sealed class WorldService : BackgroundService
         var list = LimitChecker.Check(data.Structures(), s.Limits, OwnerNames(def), Exempt(def, s));
         var warned = data.Structures().ToDictionary(x => x.Id, x => x.WarnedUtc);
         var wipes = s.AutoWipe.Count > 0
-            ? LimitChecker.AutoWipe(data.Structures(), s.AutoWipe, DateTime.UtcNow, Exempt(def, s)).Select(w => new { w.Structure.Id, w.Structure.Name, w.Structure.Playfield, type = EntityTypes.Name(w.Structure.Type), w.Reason }).ToList<object>()
+            ? LimitChecker.AutoWipe(data.Structures(), s.AutoWipe, DateTime.UtcNow, Exempt(def, s), Arrived(data)).Select(w => new { w.Structure.Id, w.Structure.Name, w.Structure.Playfield, type = EntityTypes.Name(w.Structure.Type), w.Reason }).ToList<object>()
             : [];
         return new
         {
@@ -505,8 +528,16 @@ public sealed class WorldService : BackgroundService
         };
     }
 
+    private static Func<int, DateTime> Arrived(ServerData data)
+    {
+        var moves = data.LastPlayfieldChanges();
+        var first = data.Structures().ToDictionary(x => x.Id, x => x.FirstSeenUtc);
+        return sid => moves.TryGetValue(sid, out var t) ? t : first.GetValueOrDefault(sid, DateTime.UtcNow);
+    }
+
     private async Task EnforceAsync(ServerDefinition def, WorldSettings s)
     {
+        await EnforceExtraAsync(def, s);
         var data = _live.Data(def);
         var structures = data.Structures();
         var exempt = Exempt(def, s);
@@ -526,6 +557,17 @@ public sealed class WorldService : BackgroundService
                     data.AddJournal("limit", 1, $"{v.StructureName} ({v.StructureId}, {v.Owner}): {v.Detail} [{v.Rule}]", null, v.Owner, v.Playfield);
                     await WarnOwnerAsync(def, st, $"EAM: « {st.Name} » ({st.Id}) dépasse une limite du serveur ({v.Detail}). Délai : {s.LimitGraceHours} h.");
                 }
+                else if (s.LimitAction == "sanction" && DateTime.UtcNow - st.WarnedUtc > TimeSpan.FromHours(s.LimitGraceHours)
+                         && data.StructureEvents(st.Id, 20).All(e => e.Kind != "sanction"))
+                {
+                    try
+                    {
+                        await _manager.ConsoleAsync(def.Id, $"faction entity '{s.SanctionFaction.Trim()}' {st.Id}", "EAM");
+                        data.StructureEventBy(st.Id, "sanction", $"{st.FactionGroup}:{st.FactionId}", s.SanctionFaction.Trim(), "EAM");
+                        data.AddJournal("limit", 2, $"{st.Name} ({st.Id}, {v.Owner}) given to the sanction faction {s.SanctionFaction}: {v.Detail}", null, v.Owner, st.Playfield);
+                    }
+                    catch (ServerException e) { _log.LogWarning("Sanction of {Id} failed: {Err}", st.Id, e.Code); }
+                }
                 else if (s.LimitAction == "destroy" && DateTime.UtcNow - st.WarnedUtc > TimeSpan.FromHours(s.LimitGraceHours))
                 {
                     try
@@ -541,7 +583,7 @@ public sealed class WorldService : BackgroundService
         }
         if (s.AutoWipeEnabled && s.AutoWipe.Count > 0)
         {
-            foreach (var (st, reason) in LimitChecker.AutoWipe(structures, s.AutoWipe, DateTime.UtcNow, exempt).Take(20))
+            foreach (var (st, reason) in LimitChecker.AutoWipe(structures, s.AutoWipe, DateTime.UtcNow, exempt, Arrived(data)).Take(20))
             {
                 try
                 {
@@ -551,6 +593,53 @@ public sealed class WorldService : BackgroundService
                     data.AddJournal("autowipe", 1, $"{st.Name} ({st.Id}) removed: {reason} (saved in the library)", null, null, st.Playfield);
                 }
                 catch (ServerException e) { _log.LogWarning("Auto wipe of {Id} failed: {Err}", st.Id, e.Code); }
+            }
+        }
+    }
+
+    /// <summary>Sanctioned structures removed after a delay, total structure count, untouched structures made public.</summary>
+    private async Task EnforceExtraAsync(ServerDefinition def, WorldSettings s)
+    {
+        var data = _live.Data(def);
+        var structures = data.Structures();
+        if (s.TotalMaxStructures > 0 && structures.Count > s.TotalMaxStructures)
+        {
+            var c = data.Counter("server", "total_structures_alert");
+            if (c is null || DateTime.UtcNow - c.LastUtc > TimeSpan.FromHours(6))
+            {
+                data.SetCounter("server", "total_structures_alert", structures.Count);
+                data.AddJournal("limit", 2, $"{structures.Count} structures on the server (limit {s.TotalMaxStructures})", null, null);
+            }
+        }
+        if (s.LimitAction == "sanction" && s.SanctionDestroyHours > 0)
+        {
+            foreach (var st in structures)
+            {
+                var ev = data.StructureEvents(st.Id, 20).FirstOrDefault(e => e.Kind == "sanction");
+                if (ev is null || DateTime.UtcNow - ev.Utc < TimeSpan.FromHours(s.SanctionDestroyHours)) continue;
+                if (data.StructureEvents(st.Id, 20).Any(e => e.Kind == "limit_removed")) continue;
+                try
+                {
+                    await ExportAsync(def, st, "EAM", "sanction removal");
+                    await _live.RequestAsync(def.Id, new() { ["op"] = "destroy", ["id"] = st.Id }, TimeSpan.FromSeconds(30));
+                    data.StructureEventBy(st.Id, "limit_removed", null, "sanction", "EAM");
+                }
+                catch (ServerException e) { _log.LogWarning("Sanction removal of {Id} failed: {Err}", st.Id, e.Code); }
+            }
+        }
+        if (s.UntouchedPublicHours > 0)
+        {
+            var exempt = Exempt(def, s);
+            foreach (var st in structures.Where(x => FactionGroups.IsPlayerOwned(x.FactionGroup, x.FactionId) && !exempt(x.FactionGroup, x.FactionId)).Take(500))
+            {
+                if (st.LastVisitedUtc is not { Year: > 2000 } lv || DateTime.UtcNow - lv < TimeSpan.FromHours(s.UntouchedPublicHours)) continue;
+                if (data.StructureEvents(st.Id, 20).Any(e => e.Kind == "made_public" && e.Utc > lv)) continue;
+                try
+                {
+                    await _manager.ConsoleAsync(def.Id, $"faction entity '{s.PublicFaction.Trim()}' {st.Id}", "EAM");
+                    data.StructureEventBy(st.Id, "made_public", $"{st.FactionGroup}:{st.FactionId}", s.PublicFaction.Trim(), "EAM");
+                }
+                catch (ServerException e) { _log.LogWarning("Making {Id} public failed: {Err}", st.Id, e.Code); }
             }
         }
     }

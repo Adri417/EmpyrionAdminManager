@@ -22,6 +22,7 @@ SteamCMD, backups, scheduler, live players and chat, structures, maps, chatbot, 
 - [Accounts and roles](#accounts-and-roles)
 - [Remote access and HTTPS](#remote-access-and-https)
 - [Players' chatbot commands](#players-chatbot-commands)
+- [Coming from EAH](#coming-from-eah)
 - [Where the data lives](#where-the-data-lives)
 - [Updating EAM](#updating-eam)
 - [Troubleshooting](#troubleshooting)
@@ -71,6 +72,12 @@ SteamCMD, backups, scheduler, live players and chat, structures, maps, chatbot, 
 - Give items (catalogue translated from the scenario), teleport, heal, finish a blueprint.
 - Private message (delivered at the next login if the player is offline), kick, ban and unban, list of banned players.
 - Roles in `adminconfig.yaml`, full history of connections and admin actions.
+- Online players are shown first and outlined in green.
+- **Backpack history:** a copy of every online player's backpack every few minutes and at each death. View any copy, give it back (replace) or give the items on top. Death inventories of all players in one list. Copies can be kept forever.
+- God mode, admin notes and marked players, faction change, blueprint resources, reset of survival or play time, player file copies (save, reset, load), "take their place" (play with the player's inventory and faction, then get yours back), kick everyone.
+
+| ![Backpack history](docs/images/backpack-history.png) | ![A backpack copy](docs/images/backpack-view.png) |
+|---|---|
 
 ### Structures and world
 - Full structure list (filter by type, playfield, owner, power), detailed sheet (blocks, devices, items), history of each structure.
@@ -240,6 +247,18 @@ The prefix is set in **Community** (default `CB:`). Examples with the default pr
 
 Each command can be turned on or off, and you can add your own commands.
 
+## Coming from EAH
+
+EAM imports a server that used EAH (Empyrion Admin Helper) in one click: **Servers → Import a server (EAH)**.
+
+1. Give the folder of the Empyrion server or EAH's folder. EAM finds EAH's databases and settings by itself and shows what it found.
+2. Choose: copy the server into EAM (the original is not touched), use the folder as it is, or only import EAH's data into a server already in EAM.
+3. Choose the data: players, notes and marks, chat (90 days), histories, backpack copies, structures and their history, statistics, settings (MOTD, filter, chatbot, Discord, limits, wipes), scheduled tasks and inventory templates.
+
+Scheduled tasks are imported switched off. **Stop EAH and the old server before you start the server in EAM:** two tools must never manage the same server.
+
+![Import from EAH](docs/images/import.png)
+
 ## Where the data lives
 
 - Installed mode: `C:\ProgramData\EmpyrionAdminManager`.
@@ -250,9 +269,9 @@ Inside: `eam.json` (settings), `eam.db` (accounts), `logs\`, `keys\`, `certifica
 
 ## Updating EAM
 
-1. Stop EAM (close the window, and stop the service if you installed it).
-2. Unzip the new version over the old folder. Your `data` folder and `portable.txt` are kept.
-3. Start EAM again. The mod in each server is updated at its next start.
+EAM looks for a new version on GitHub every hour. When there is one, **Update available** shows at the top of the side menu. The owner clicks **Update**: EAM downloads the release, replaces only the program files, and restarts by itself (about one minute). Your `data` folder (servers, databases, settings) is never touched, the game servers keep running, and a copy of the previous version is kept in `data\temp\update\previous`. The hourly check can be switched off in **Settings → Updates**.
+
+By hand: stop EAM, unzip the new version over the old folder (`data` and `portable.txt` are kept), start EAM again. The mod in each server is updated at its next start.
 
 ## Troubleshooting
 
@@ -278,8 +297,8 @@ Each new version pushed to `main` (version number in `Directory.Build.props`) is
 ## Roadmap
 
 - **Done (0.1 to 0.9):** foundations, servers and SteamCMD, mod and live view, backups and scheduler, options and scenarios, players, structures and world, community, security, Let's Encrypt, mods, Autominer, events, maintenance.
-- **Next:** inventory history (give back a backpack after a bugged death), god mode, player saves and impersonation, partial restore of a structure or a player from a backup, more scheduler actions.
-- **Then:** one-click import of a server that used EAH (all its data and settings), and version 1.0.
+- **Done (0.9.5):** backpack history, one-click import from EAH, automatic update from GitHub, online players in green, god mode, player files and "take their place", partial restore from a backup, structures-only backups, more scheduler actions (sequences, solar system wipes, cleanups), structure sanctions and public structures.
+- **Next:** tests on real servers, then version 1.0.
 
 Ideas and bug reports are welcome in [Issues](../../issues).
 
@@ -313,6 +332,7 @@ SteamCMD, sauvegardes, planificateur, joueurs et chat en direct, structures, car
 - [Comptes et rôles](#comptes-et-rôles)
 - [Accès à distance et HTTPS](#accès-à-distance-et-https)
 - [Commandes du chatbot des joueurs](#commandes-du-chatbot-des-joueurs)
+- [Venir d'EAH](#venir-deah)
 - [Où sont les données](#où-sont-les-données)
 - [Mettre EAM à jour](#mettre-eam-à-jour)
 - [Problèmes fréquents](#problèmes-fréquents)
@@ -362,6 +382,12 @@ SteamCMD, sauvegardes, planificateur, joueurs et chat en direct, structures, car
 - Donner des objets (catalogue traduit du scénario), téléporter, soigner, terminer un plan.
 - Message privé (remis à la prochaine connexion si le joueur est hors ligne), expulser, bannir et débannir, liste des bannis.
 - Rôles dans `adminconfig.yaml`, historique complet des connexions et des actions des admins.
+- Les joueurs connectés sont en haut de la liste et entourés en vert.
+- **Historique des sacs à dos :** une copie du sac de chaque joueur connecté toutes les quelques minutes et à chaque mort. Voir une copie, la rendre (remplacer) ou donner les objets en plus. Les inventaires à la mort de tous les joueurs dans une seule liste. Les copies peuvent être gardées pour toujours.
+- Mode dieu, notes des admins et joueurs marqués, changement de faction, ressources de plans, remise à zéro de la survie ou du temps de jeu, copies du fichier joueur (copier, remettre à zéro, charger), « prendre sa place » (jouer avec l'inventaire et la faction du joueur, puis retrouver le sien), expulser tout le monde.
+
+| ![Historique des sacs à dos](docs/images/backpack-history.png) | ![Une copie de sac à dos](docs/images/backpack-view.png) |
+|---|---|
 
 ### Structures et monde
 - Liste complète des structures (filtres par type, playfield, propriétaire, alimentation), fiche détaillée (blocs, appareils, objets), historique de chaque structure.
@@ -531,6 +557,18 @@ Le préfixe se règle dans **Communauté** (par défaut `CB:`). Exemples avec le
 
 Chaque commande peut être activée ou non, et vous pouvez ajouter vos propres commandes.
 
+## Venir d'EAH
+
+EAM importe en un clic un serveur qui utilisait EAH (Empyrion Admin Helper) : **Serveurs → Importer un serveur (EAH)**.
+
+1. Indiquez le dossier du serveur Empyrion ou celui d'EAH. EAM retrouve seul les bases et réglages d'EAH et montre ce qu'il a trouvé.
+2. Choisissez : copier le serveur dans EAM (l'original n'est pas touché), utiliser le dossier tel quel, ou importer seulement les données d'EAH dans un serveur déjà présent dans EAM.
+3. Choisissez les données : joueurs, notes et marqués, chat (90 jours), historiques, copies des sacs à dos, structures et leur historique, statistiques, réglages (MOTD, filtre, chatbot, Discord, limites, wipes), tâches planifiées et modèles d'inventaire.
+
+Les tâches planifiées sont importées désactivées. **Arrêtez EAH et l'ancien serveur avant de démarrer le serveur dans EAM :** deux outils ne doivent jamais gérer le même serveur.
+
+![Import depuis EAH](docs/images/import.png)
+
 ## Où sont les données
 
 - Mode installé : `C:\ProgramData\EmpyrionAdminManager`.
@@ -541,9 +579,9 @@ Dedans : `eam.json` (paramètres), `eam.db` (comptes), `logs\`, `keys\`, `certif
 
 ## Mettre EAM à jour
 
-1. Arrêtez EAM (fermez la fenêtre, et arrêtez le service s'il est installé).
-2. Décompressez la nouvelle version par-dessus l'ancien dossier. Votre dossier `data` et `portable.txt` sont conservés.
-3. Relancez EAM. Le mod de chaque serveur est mis à jour à son prochain démarrage.
+EAM cherche une nouvelle version sur GitHub toutes les heures. Quand il y en a une, **Mise à jour disponible** s'affiche en haut du menu de gauche. Le propriétaire clique sur **Mettre à jour** : EAM télécharge la version, remplace seulement les fichiers du programme et redémarre tout seul (environ une minute). Le dossier `data` (serveurs, bases, réglages) n'est jamais touché, les serveurs de jeu continuent de tourner, et une copie de l'ancienne version est gardée dans `data\temp\update\previous`. La vérification peut être coupée dans **Réglages → Mises à jour**.
+
+À la main : arrêtez EAM, décompressez la nouvelle version par-dessus l'ancien dossier (`data` et `portable.txt` sont gardés), relancez EAM. Le mod de chaque serveur est mis à jour à son prochain démarrage.
 
 ## Problèmes fréquents
 
@@ -569,8 +607,8 @@ Chaque nouvelle version poussée sur `main` (numéro dans `Directory.Build.props
 ## Feuille de route
 
 - **Fait (0.1 à 0.9) :** fondations, serveurs et SteamCMD, mod et vue en direct, sauvegardes et planificateur, options et scénarios, joueurs, structures et monde, communauté, sécurité, Let's Encrypt, mods, Autominer, événements, maintenance.
-- **Ensuite :** historique des inventaires (rendre un sac à dos après une mort buggée), mode dieu, sauvegardes de joueurs et incarnation, restauration partielle d'une structure ou d'un joueur depuis une sauvegarde, nouvelles actions du planificateur.
-- **Puis :** import en un clic d'un serveur qui utilisait EAH (toutes ses données et réglages), et la version 1.0.
+- **Fait (0.9.5) :** historique des sacs à dos, import en un clic depuis EAH, mise à jour automatique depuis GitHub, joueurs connectés en vert, mode dieu, fichiers joueurs et « prendre sa place », restauration partielle depuis une sauvegarde, sauvegardes des structures seules, nouvelles actions du planificateur (suites d'actions, wipe d'un système solaire, nettoyages), sanctions de structures et structures publiques.
+- **Ensuite :** tests sur de vrais serveurs, puis la version 1.0.
 
 Idées et rapports de bugs bienvenus dans les [Issues](../../issues).
 

@@ -27,7 +27,13 @@ public sealed record ServerDefinition
     /// <summary>Local port of the EAM mod: game port + 5 (or + 6 if telnet already uses + 5).</summary>
     public int ModPort => PortAllocator.ModPortFor(GamePort, TelnetPort);
 
-    public string GameDir => Path.Combine(RootDir, "game");
+    /// <summary>
+    /// An existing Empyrion folder used in place (server imported from another tool without copying it).
+    /// Null for servers installed by EAM: the game is then in RootDir\game.
+    /// </summary>
+    public string? GameDirOverride { get; init; }
+
+    public string GameDir => GameDirOverride ?? Path.Combine(RootDir, "game");
     public string EamDir => Path.Combine(RootDir, "eam");
     /// <summary>
     /// EAM's own copy of the configuration. Steam updates can overwrite dedicated.yaml, never this file.

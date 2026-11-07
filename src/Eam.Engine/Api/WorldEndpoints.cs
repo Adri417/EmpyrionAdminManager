@@ -19,8 +19,8 @@ public static class WorldEndpoints
         g.MapPost("/structures/refresh", (long id, WorldService w) => Api.RunAsync(async () => new { count = await w.RefreshAsync(id) }))
             .RequireAuthorization(Roles.Moderator);
         g.MapGet("/structures/{sid:int}", (long id, int sid, WorldService w) => Api.RunAsync(() => w.DetailAsync(id, sid))).RequireAuthorization(Roles.Moderator);
-        g.MapPost("/structures/{sid:int}/action", (long id, int sid, StructureActionRequest req, WorldService w, HttpContext c) =>
-            Api.RunAsync(async () => await w.ActAsync(id, sid, req, By(c)) ?? Api.Ok)).RequireAuthorization(Roles.GameMaster);
+        g.MapPost("/structures/{sid:int}/action", (long id, int sid, StructureActionRequest req, WorldService w, Eam.Core.Security.UserStore users, HttpContext c) =>
+            Api.RunAsync(async () => await w.ActAsync(id, sid, req with { AdminSteamId = users.FindByName(By(c))?.SteamId }, By(c)) ?? Api.Ok)).RequireAuthorization(Roles.GameMaster);
         g.MapGet("/structures/violations", (long id, WorldService w) => Api.Run(() => w.Violations(id))).RequireAuthorization(Roles.Moderator);
         g.MapGet("/library", (long id, WorldService w) => Api.Run(() => w.Library(id))).RequireAuthorization(Roles.GameMaster);
         g.MapPost("/library/spawn", (long id, SpawnRequest req, WorldService w, HttpContext c) =>

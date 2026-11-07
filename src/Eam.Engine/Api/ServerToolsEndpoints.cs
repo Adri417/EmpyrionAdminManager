@@ -3,7 +3,8 @@ using Eam.Engine.Servers;
 
 namespace Eam.Engine.Api;
 
-public sealed record BackupCreateRequest(string? Note);
+public sealed record BackupCreateRequest(string? Note, string? Kind = null);
+public sealed record BackupPartRequest(string Name, List<int>? Structures, string? SteamId, bool Keep = false);
 public sealed record BackupRestoreRequest(string Name, bool RestoreConfig, bool RestoreEamData);
 public sealed record OptionsRequest(List<OptionChange> Changes);
 public sealed record RawYamlRequest(string Text);
@@ -25,7 +26,7 @@ public static class ServerToolsEndpoints
         g.MapPost("/backups", (long id, BackupCreateRequest req, BackupService b, HttpContext c) =>
         {
             if (b.IsRunning(id)) return Results.BadRequest(new { error = "backup_running" });
-            _ = b.CreateAsync(id, "manual", By(c), req.Note?.Trim() is { Length: > 0 and <= 200 } n ? n : null)
+            _ = b.CreateAsync(id, req.Kind == "structures" ? "structures" : "manual", By(c), req.Note?.Trim() is { Length: > 0 and <= 200 } n ? n : null)
                 .ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
             return Results.Accepted();
         }).RequireAuthorization(Roles.Admin);
@@ -36,6 +37,11 @@ public static class ServerToolsEndpoints
             .RequireAuthorization(Roles.Owner);
         g.MapPost("/backups/delete", (long id, BackupRestoreRequest req, BackupService b, HttpContext c) => Run(() => { b.Delete(id, req.Name, By(c)); return Ok; }))
             .RequireAuthorization(Roles.Admin);
+        g.MapPost("/backups/keep", (long id, BackupPartRequest req, BackupService b) => Run(() => { b.SetKept(id, req.Name, req.Keep); return Ok; }))
+            .RequireAuthorization(Roles.Admin);
+        g.MapGet("/backups/contents", (long id, string name, BackupService b) => Run(() => b.Contents(id, name))).RequireAuthorization(Roles.Admin);
+        g.MapPost("/backups/restore-part", (long id, BackupPartRequest req, BackupService b, HttpContext c) =>
+            RunAsync(() => b.RestorePartAsync(id, req.Name, req.Structures, req.SteamId, By(c)))).RequireAuthorization(Roles.Admin);
         g.MapGet("/backups/download", (long id, string name, BackupService b) =>
         {
             try { return Results.File(b.FileOf(id, name), "application/zip", name + ".zip", enableRangeProcessing: true); }
@@ -73,8 +79,29 @@ public static class ServerToolsEndpoints
         g.MapGet("/players/banned", (long id, PlayerService p) => RunAsync(() => p.BannedAsync(id))).RequireAuthorization(Roles.Moderator);
         g.MapGet("/players/items", (long id, string? lang, PlayerService p) => Run(() => p.Items(id, lang ?? "en"))).RequireAuthorization(Roles.GameMaster);
         g.MapGet("/players/{steamId}", (long id, string steamId, PlayerService p) => RunAsync(() => p.DetailAsync(id, steamId))).RequireAuthorization(Roles.Moderator);
-        g.MapPost("/players/{steamId}/action", (long id, string steamId, PlayerActionRequest req, PlayerService p, HttpContext c) =>
-            RunAsync(async () => await p.ActAsync(id, steamId, req, By(c), RoleOf(c)) ?? Ok)).RequireAuthorization(Roles.Moderator);
+        g.MapPost("/players/{steamId}/action", (long id, string steamId, PlayerActionRequest req, PlayerService p, Eam.Core.Security.UserStore users, HttpContext c) =>
+            RunAsync(async () =>
+            {
+                // "Impersonate" uses the admin's own character: the Steam ID of their EAM account.
+                if (req.Action is "impersonate" or "impersonate_end")
+                    req = req with { Target = users.FindByName(By(c))?.SteamId ?? throw new ServerException("admin_steam_missing") };
+                return await p.ActAsync(id, steamId, req, By(c), RoleOf(c)) ?? Ok;
+            })).RequireAuthorization(Roles.Moderator);
+        g.MapPost("/players/kick-all", (long id, NameRequest req, PlayerService p, HttpContext c) => RunAsync(async () => new { kicked = await p.KickAllAsync(id, req.Name, By(c)) }))
+            .RequireAuthorization(Roles.Moderator);
+        g.MapGet("/inventories", (long id, string? steamId, string? reason, PlayerService p) => Run(() => p.Inventories(id, steamId, reason))).RequireAuthorization(Roles.GameMaster);
+        g.MapGet("/inventory-templates", (long id, LiveService l, ServerManager m) => Run(() => l.Data(m.Definition(id)).InventoryTemplates())).RequireAuthorization(Roles.GameMaster);
+        g.MapPost("/inventory-templates/delete", (long id, NameRequest req, LiveService l, ServerManager m) => Run(() => { l.Data(m.Definition(id)).DeleteInventoryTemplate(req.Name); return Ok; }))
+            .RequireAuthorization(Roles.Admin);
+        g.MapGet("/positions", (long id, LiveService l, ServerManager m) => Run(() => l.Data(m.Definition(id)).SavedPositions())).RequireAuthorization(Roles.GameMaster);
+        g.MapPost("/positions", (long id, Eam.Core.Servers.SavedPosition req, LiveService l, ServerManager m) => Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 40 || string.IsNullOrWhiteSpace(req.Playfield)) throw new ServerException("invalid_name");
+            l.Data(m.Definition(id)).SavePosition(req with { Name = req.Name.Trim(), Playfield = req.Playfield.Trim() });
+            return Ok;
+        })).RequireAuthorization(Roles.GameMaster);
+        g.MapPost("/positions/delete", (long id, NameRequest req, LiveService l, ServerManager m) => Run(() => { l.Data(m.Definition(id)).DeletePosition(req.Name); return Ok; }))
+            .RequireAuthorization(Roles.GameMaster);
     }
 
     private static readonly object Ok = new { ok = true };

@@ -119,6 +119,19 @@ public sealed partial class ServerData
             saved TEXT NULL, back_pf TEXT NULL, back_x REAL, back_y REAL, back_z REAL, PRIMARY KEY (event_id, steam_id)
         );
         """,
+        """
+        CREATE TABLE inventory_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, steam_id TEXT NOT NULL, name TEXT NOT NULL, utc TEXT NOT NULL, reason TEXT NOT NULL,
+            pf TEXT NULL, toolbelt TEXT NOT NULL, bag TEXT NOT NULL, hash TEXT NOT NULL
+        );
+        CREATE INDEX inventory_snapshots_steam ON inventory_snapshots(steam_id, id);
+        CREATE TABLE player_meta (
+            steam_id TEXT PRIMARY KEY, note TEXT NULL, marked INTEGER NOT NULL DEFAULT 0, ban_exempt INTEGER NOT NULL DEFAULT 0,
+            god INTEGER NOT NULL DEFAULT 0, updated_utc TEXT NOT NULL
+        );
+        CREATE TABLE inventory_templates (name TEXT PRIMARY KEY, toolbelt TEXT NOT NULL, bag TEXT NOT NULL, utc TEXT NOT NULL);
+        CREATE TABLE saved_positions (name TEXT PRIMARY KEY, pf TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL, utc TEXT NOT NULL);
+        """,
     ];
 
     private readonly Database _db;

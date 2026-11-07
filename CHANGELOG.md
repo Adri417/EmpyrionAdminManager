@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.5 (2026-11-07) - Import EAH, historique des sacs à dos, mise à jour automatique
+- Import en un clic d'un serveur qui utilisait EAH : EAM lit seul ses bases chiffrées et ses réglages. Joueurs, notes et marqués, chat (90 jours), historiques (actions, kicks, bans, positions, intrusions), copies des sacs à dos, structures et leur historique, statistiques, réglages (MOTD, filtre, chatbot, Discord, limites, wipes), tâches planifiées (importées désactivées), modèles d'inventaire. Le serveur peut être copié dans EAM, utilisé tel quel, ou ses données ajoutées à un serveur EAM existant.
+- Historique des sacs à dos : copie régulière du sac des joueurs connectés et à chaque mort, voir une copie, la rendre ou donner les objets en plus, inventaires à la mort de tous les joueurs, copies gardées, modèles d'inventaire.
+- Mise à jour automatique : EAM cherche une nouvelle version sur GitHub toutes les heures, « Mise à jour disponible » en haut du menu, mise à jour en un clic sans toucher aux données ni arrêter les serveurs de jeu (copie de l'ancienne version gardée, retour arrière si la copie échoue).
+- Joueurs : connectés en tête de liste et entourés en vert, mode dieu, notes des admins et joueurs marqués, jamais banni automatiquement, faction, ressources de plans, remise à zéro de la survie ou du temps de jeu, copies du fichier joueur, « prendre sa place », expulser tout le monde.
+- Sauvegardes : sauvegarde des structures seules, sauvegardes gardées pour toujours, restauration partielle (structures ou fichier d'un joueur), suppression après N jours, espace disque minimum.
+- Planificateur : suites d'actions avec délais, sauvegarde des structures, nettoyage du dossier Shared, contrôle des limites, nettoyage des joueurs inactifs et des copies de sacs à dos, wipe d'un système solaire entier avec exceptions.
+- Monde : sanction des structures en trop (données à une faction puis détruites), nombre total de structures par joueur, structures publiques abandonnées, wipe seulement si le propriétaire n'est pas venu.
+- Communauté : les joueurs peuvent repartir à zéro eux-mêmes (nombre gratuit puis délai).
+- Mod EAM 0.9.5.
+
 ## 0.9.0 (2026-11-07) - Étapes 6 à 9 : monde, communauté, sécurité, outils
 - Structures : liste complète (filtres par type, playfield, propriétaire, alimentation), fiche détaillée (blocs, appareils, objets), renommer, changer de propriétaire, déplacer (vers un playfield, une position ou un joueur), exporter, cloner, détruire (exportée d'abord), restaurer depuis la bibliothèque d'EAM, historique de chaque structure.
 - Plans (.epb) : import, liste, apparition dans le jeu. Nettoyage du dossier Shared (dossiers de structures disparues mis de côté, jamais effacés).

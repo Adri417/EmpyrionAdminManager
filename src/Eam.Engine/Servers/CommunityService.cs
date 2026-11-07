@@ -17,15 +17,17 @@ public sealed partial class CommunityService
     private readonly SchedulerService _scheduler;
     private readonly WorldService _world;
     private readonly Alerts _alerts;
+    private readonly BackupService _backups;
     private readonly ILogger<CommunityService> _log;
 
-    public CommunityService(ServerManager manager, LiveService live, SchedulerService scheduler, WorldService world, Alerts alerts, ILogger<CommunityService> log)
+    public CommunityService(ServerManager manager, LiveService live, SchedulerService scheduler, WorldService world, Alerts alerts, BackupService backups, ILogger<CommunityService> log)
     {
         _manager = manager;
         _live = live;
         _scheduler = scheduler;
         _world = world;
         _alerts = alerts;
+        _backups = backups;
         _log = log;
         _live.ChatReceived += OnChatAsync;
         _live.PlayerJoined += OnJoinAsync;
@@ -140,6 +142,11 @@ public sealed partial class CommunityService
             await _alerts.RaiseAsync(def, "filter", 0, $"warning {warnings}/{s.FilterWarnings} ({word})", steam, p.Name, p.Playfield);
             return;
         }
+        if (data.Meta(steam).BanExempt)
+        {
+            await _alerts.RaiseAsync(def, "filter", 1, $"{warnings} warnings ({word}), not banned: exempt", steam, p.Name, p.Playfield);
+            return;
+        }
         // Each new ban lasts twice as long as the previous one.
         var bans = data.Counter(steam, "filter_bans")?.Count ?? 0;
         var minutes = (int)Math.Min(s.FilterFirstBanMinutes * Math.Pow(2, bans), 60 * 24 * 365);
@@ -183,7 +190,9 @@ public sealed partial class CommunityService
                 var lines = new List<string> { $"{s.Prefix}info", $"{s.Prefix}time", $"{s.Prefix}nextrestart", $"{s.Prefix}nextwipe", $"{s.Prefix}w:<nom>:<message>", "!mods" };
                 if (s.HealEnabled) lines.Add($"{s.Prefix}heal");
                 if (s.SurvivalKitEnabled) lines.Add($"{s.Prefix}survival");
-                if (s.ShipCommandsEnabled) lines.AddRange([$"{s.Prefix}getshiphere:<id>", $"{s.Prefix}gotoship:<id>", $"{s.Prefix}destroy:<id>"]);
+                if (s.ShipCommandsEnabled) lines.AddRange([$"{s.Prefix}getshiphere:<id>", $"{s.Prefix}getshipdown:<id>", $"{s.Prefix}gotoship:<id>", $"{s.Prefix}destroy:<id>"]);
+                lines.Add($"{s.Prefix}wipe");
+                if (s.ResetEnabled) lines.Add($"{s.Prefix}reset");
                 lines.AddRange(s.Commands.Select(c => $"{s.Prefix}{c.Command} — {c.Description}"));
                 await ReplyAsync(def, p, string.Join("\n", lines));
                 break;
@@ -281,6 +290,83 @@ public sealed partial class CommunityService
                     await _live.RequestAsync(def.Id, req, TimeSpan.FromSeconds(60));
                     data.PlayerEvent(steam, p.Name, "chatbot_gotoship", $"{sid} {st.Name}", "chatbot");
                 }
+                break;
+            }
+            case "getshipdown":
+            {
+                if (!s.ShipCommandsEnabled) throw new ServerException("disabled");
+                if (!int.TryParse(arg, out var sid)) throw new ServerException("structure_not_found");
+                var st = data.Structure(sid);
+                if (st is null || st.RemovedUtc is not null || st.Type == EntityTypes.BA) throw new ServerException("structure_not_found");
+                var mine = st.FactionGroup == FactionGroups.Player && st.FactionId == p.Id || st.FactionGroup == FactionGroups.Faction && st.FactionId == p.FactionId && p.FactionId > 0;
+                if (!mine) throw new ServerException("not_yours");
+                if (!string.Equals(st.Playfield, p.Playfield, StringComparison.OrdinalIgnoreCase)) throw new ServerException("structure_not_found");
+                if (CoolingDown(data, steam, s)) throw new ServerException("cooldown");
+                // Stuck in the sky or under the ground: brought down next to the player, at their height.
+                await _live.RequestAsync(def.Id, new() { ["op"] = "entity_move", ["id"] = sid, ["x"] = p.X + 20, ["y"] = p.Y + 3, ["z"] = p.Z + 20 }, TimeSpan.FromSeconds(30));
+                data.StructureEventBy(sid, "player_getshipdown", null, $"{p.X:0}, {p.Y:0}, {p.Z:0}", p.Name);
+                await ReplyAsync(def, p, $"EAM: « {st.Name} » posé près de vous / set down next to you");
+                break;
+            }
+            case "wipe":
+            {
+                var next = _scheduler.NextRun(def.Id, "wipe");
+                var here = data.Tasks().Where(t => t.Enabled && t.Kind == "wipe")
+                    .Any(t => t.Params.Contains("\"" + (p.Playfield ?? "") + "\"", StringComparison.OrdinalIgnoreCase) || t.Params.Contains("\"*\""));
+                await ReplyAsync(def, p, next is { } n
+                    ? $"Prochain wipe / next wipe: {n:dd/MM HH:mm}. {p.Playfield}: {(here ? "concerné / included" : "non concerné / not included")}"
+                    : "Aucun wipe prévu / no wipe planned");
+                break;
+            }
+            case "reset":
+            {
+                if (!s.ResetEnabled) throw new ServerException("disabled");
+                var seen = data.Players().FirstOrDefault(x => x.SteamId == steam);
+                var used = data.Counter(steam, "cb_reset");
+                var free = (seen?.PlaytimeSeconds ?? 0) < s.ResetFreeHours * 3600 && (used?.Count ?? 0) < s.ResetFreeCount;
+                if (!free && used is not null && DateTime.UtcNow - used.LastUtc < TimeSpan.FromHours(s.ResetEveryHours)) throw new ServerException("cooldown");
+                var pending = data.Counter(steam, "cb_reset_confirm");
+                if (pending is null || DateTime.UtcNow - pending.LastUtc > TimeSpan.FromMinutes(1))
+                {
+                    data.SetCounter(steam, "cb_reset_confirm", 1);
+                    await ReplyAsync(def, p, $"EAM: ATTENTION, vous repartirez de zéro (inventaire, niveau, position). Retapez {s.Prefix}reset dans la minute pour confirmer. / You will start again from zero, type it again within a minute to confirm.");
+                    return;
+                }
+                data.DeleteCounter(steam, "cb_reset_confirm");
+                data.SetCounter(steam, "cb_reset", (used?.Count ?? 0) + 1);
+                data.PlayerEvent(steam, p.Name, "chatbot_reset", "", "chatbot");
+                await ReplyAsync(def, p, "EAM: reset dans 10 s, reconnectez-vous ensuite / reset in 10 s, log in again afterwards");
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(10));
+                        await _manager.ConsoleAsync(def.Id, $"kick {p.Id} 'CB:reset'", "EAM chatbot");
+                        // The game writes the player file when they leave: wait for it, then move it aside.
+                        for (var i = 0; i < 30 && _live.OnlineBySteam(def.Id, steam) is not null; i++) await Task.Delay(TimeSpan.FromSeconds(2));
+                        await Task.Delay(TimeSpan.FromSeconds(5));
+                        var file = PlayerService.PlayerFile(def, steam);
+                        if (File.Exists(file))
+                        {
+                            var aside = Path.Combine(def.EamDir, "players-removed", DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-reset");
+                            Directory.CreateDirectory(aside);
+                            File.Move(file, Path.Combine(aside, Path.GetFileName(file)));
+                        }
+                    }
+                    catch (Exception e) { _log.LogWarning("CB:reset of {Name} failed: {Err}", p.Name, e.Message); }
+                });
+                break;
+            }
+            case "backup":
+            {
+                if (!s.AdminCommandsEnabled) throw new ServerException("disabled");
+                if (!IsInGameAdmin(def, p, steam)) throw new ServerException("forbidden");
+                await ReplyAsync(def, p, "EAM: sauvegarde en cours / backup started");
+                _ = Task.Run(async () =>
+                {
+                    try { var b = await _backups.CreateAsync(def.Id, "manual", p.Name + " (in game)", "CB:backup"); await ReplyAsync(def, p, "EAM: sauvegarde faite / backup done"); }
+                    catch (Exception e) { _log.LogWarning("In-game backup failed: {Err}", e.Message); }
+                });
                 break;
             }
             case "restart":
