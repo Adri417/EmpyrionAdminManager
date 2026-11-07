@@ -53,6 +53,24 @@ public sealed class Database
             value TEXT NOT NULL
         );
         """,
+        // 2: game servers managed by EAM
+        """
+        CREATE TABLE servers (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug             TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            name             TEXT NOT NULL,
+            root_dir         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            game_port        INTEGER NOT NULL UNIQUE,
+            telnet_port      INTEGER NOT NULL UNIQUE,
+            telnet_password  TEXT NOT NULL,
+            branch           TEXT NOT NULL DEFAULT 'public',
+            auto_start       INTEGER NOT NULL DEFAULT 0,
+            auto_restart     INTEGER NOT NULL DEFAULT 1,
+            installed        INTEGER NOT NULL DEFAULT 0,
+            build_id         TEXT NULL,
+            created_utc      TEXT NOT NULL
+        );
+        """,
     ];
 
     public void Migrate()

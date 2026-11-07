@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { t, setLanguage, errorText } from "./i18n.js";
 import { html, raw, mount, $, $$, toast, formatBytes, timeSpanSeconds } from "./dom.js";
+import { initServers, serverEvent, loadServers, renderServerList, renderServerDetail, dashboardServers, setServersListener } from "./servers.js";
 
 const app = document.getElementById("app");
 const state = { status: null, me: null, socket: null, system: null };
@@ -99,7 +100,7 @@ function showLogin() {
 // ---------------------------------------------------------------- shell
 const pages = {
   dashboard: { icon: "◎", label: "nav_dashboard", role: "viewer", render: renderDashboard },
-  servers: { icon: "▣", label: "nav_servers", role: "viewer", render: renderServers, soon: true },
+  servers: { icon: "▣", label: "nav_servers", role: "viewer", render: renderServerList },
   users: { icon: "☺", label: "nav_users", role: "owner", render: renderUsers },
   settings: { icon: "⚙", label: "nav_settings", role: "owner", render: renderSettings },
   account: { icon: "●", label: "nav_account", role: "viewer", render: renderAccount },
@@ -127,6 +128,7 @@ function showShell() {
     try { await api.post("/api/logout"); } catch {}
     state.me = null; closeSocket(); showLogin();
   });
+  initServers(state.me);
   openSocket();
   route();
 }
@@ -134,12 +136,20 @@ function showShell() {
 window.addEventListener("hashchange", () => { if (state.me) route(); });
 
 function route() {
+  setServersListener(null);
+  const page = $("#page");
+  page.replaceChildren();
+  const detail = location.hash.match(/^#\/server\/(\d+)/);
+  if (detail) {
+    $$(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === "servers"));
+    $("#title").textContent = t("nav_servers");
+    renderServerDetail(page, +detail[1], (name) => { $("#title").textContent = name; });
+    return;
+  }
   let id = (location.hash.match(/^#\/(\w+)/) || [])[1] || "dashboard";
   if (!pages[id] || !atLeast(state.me.role, pages[id].role)) id = "dashboard";
   $$(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === id));
   $("#title").textContent = t(pages[id].label);
-  const page = $("#page");
-  page.replaceChildren();
   pages[id].render(page);
 }
 
@@ -152,6 +162,7 @@ function openSocket() {
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === "system") { state.system = msg.data; updateDashboard(); }
+    else if (msg.type === "server" || msg.type === "servers") serverEvent(msg);
   };
   ws.onclose = () => {
     setLive(false);
@@ -182,7 +193,9 @@ function renderDashboard(page) {
       <div class="card"><h3>${t("disks")}</h3><div id="disks"></div></div>
       <div class="card"><h3>${t("machine")}</h3><dl class="kv" id="machine"></dl></div>
     </div>
-    <div class="card">${serversEmpty()}</div>`);
+    <div class="card"><h3>${t("nav_servers")}</h3><div id="dash-servers"></div></div>`);
+  setServersListener(drawDashServers);
+  loadServers();
   if (state.system) updateDashboard();
   else api.get("/api/system").then((s) => { state.system = s; updateDashboard(); }).catch(() => {});
 }
@@ -219,11 +232,21 @@ function updateDashboard() {
     <dt>${t("uptime")}</dt><dd>${duration(timeSpanSeconds(s.machineUptime))}</dd>`);
 }
 
-// ---------------------------------------------------------------- servers (step 2)
-function serversEmpty() {
-  return html`<div class="empty"><div class="big">▣</div><b>${t("servers_empty_title")}</b><div>${t("servers_empty_text")}</div></div>`;
+// ---------------------------------------------------------------- servers summary
+function drawDashServers() {
+  const el = $("#dash-servers");
+  if (!el) return;
+  const list = dashboardServers();
+  if (!list.length) {
+    mount(el, html`<div class="empty"><div class="big">▣</div><b>${t("servers_empty_title")}</b><div>${t("no_server_yet")}</div></div>`);
+    return;
+  }
+  const cls = (st) => st === "Running" ? "ok" : st === "Crashed" ? "bad" : ["Stopped", "NotInstalled"].includes(st) ? "" : "busy";
+  mount(el, html`<table><tbody>${list.map((s) => html`<tr>
+    <td><a href="#/server/${s.id}"><b>${s.name}</b></a></td>
+    <td><span class="state ${cls(s.state)}">${t("state_" + s.state)}</span></td>
+    <td class="hint">${s.gamePort}-${s.gamePort + 3}</td></tr>`)}</tbody></table>`);
 }
-function renderServers(page) { mount(page, html`<div class="card">${serversEmpty()}</div>`); }
 
 // ---------------------------------------------------------------- users
 async function renderUsers(page) {
