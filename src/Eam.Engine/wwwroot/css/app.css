@@ -150,3 +150,15 @@ form.card { max-width: 640px; }
 .console-form { display: flex; gap: 8px; margin-top: 10px; }
 .console-form input { flex: 1; font-family: Consolas, "Cascadia Mono", monospace; }
 textarea { width: 100%; padding: 9px 11px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; color: inherit; font: inherit; }
+
+/* Live view and chat (step 3) */
+.table-wrap { overflow-x: auto; }
+.chat { background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; height: 55vh; overflow-y: auto; margin-top: 8px; }
+.chat-line { padding: 3px 0; font-size: 13px; overflow-wrap: anywhere; }
+.chat-line .badge { margin: 0 6px; }
+.chat-line.from-eam b { color: var(--accent-2); }
+.chat-time { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.console-form select { width: auto; }
+#chat-more-wrap { text-align: center; }
+@media (max-width: 760px) { .console-form { flex-wrap: wrap; } .console-form select { width: 100%; } }
+#tab, #live { display: flex; flex-direction: column; gap: 14px; }

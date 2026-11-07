@@ -1,0 +1,508 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text.Json;
+using Eam.Core.Servers;
+using Eam.Engine.Api;
+
+namespace Eam.Engine.Servers;
+
+public sealed class LivePlayer
+{
+    public int Id { get; init; }
+    public string? SteamId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Playfield { get; set; }
+    public int FactionId { get; set; }
+    public string? Faction { get; set; }
+    public int Ping { get; set; }
+    public float Health { get; set; }
+    public float HealthMax { get; set; }
+    public double Credits { get; set; }
+    public int Level { get; set; }
+    public int Exp { get; set; }
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Z { get; set; }
+    public DateTime OnlineSinceUtc { get; set; } = DateTime.UtcNow;
+    internal DateTime PlaytimeCountedUtc = DateTime.UtcNow;
+}
+
+public sealed class LivePlayfield
+{
+    public string Name { get; init; } = "";
+    public int ProcessId { get; set; }
+    public int Players { get; set; }
+    public float Fps { get; set; }
+    public int MemoryMb { get; set; }
+    public int Structures { get; set; }
+    public int Mobs { get; set; }
+    public int UptimeSeconds { get; set; }
+}
+
+/// <summary>Everything EAM currently knows about one running server.</summary>
+public sealed class ServerLive
+{
+    public readonly object Gate = new();
+    public bool Connected;
+    public string? ModVersion;
+    public string? LinkError;
+    public DateTime? ConnectedUtc;
+    public readonly Dictionary<int, LivePlayer> Players = new();
+    public readonly Dictionary<string, LivePlayfield> Playfields = new(StringComparer.OrdinalIgnoreCase);
+    public readonly Dictionary<int, string> Factions = new();
+    public float? DediFps;
+    public int? DediMemoryMb;
+    public int? DediUptime;
+    public double CpuPercent;
+    public long MemoryBytes;
+    public int ProcessCount;
+    internal TimeSpan LastCpu;
+    internal DateTime LastCpuSample;
+    internal readonly List<(DateTime At, string Text)> RecentlySent = new();
+}
+
+/// <summary>
+/// Step 3: talks to the EAM mod of every running server, keeps the live picture
+/// (players, playfields, performance), records the chat and pushes everything to the open windows.
+/// </summary>
+public sealed class LiveService(ServerStore store, ServerManager manager, LiveHub hub, ILogger<LiveService> log) : BackgroundService
+{
+    private readonly ConcurrentDictionary<long, ServerLive> _live = new();
+    private readonly ConcurrentDictionary<long, LinkClient> _links = new();
+    private readonly ConcurrentDictionary<long, Task> _linkTasks = new();
+    private readonly ConcurrentDictionary<long, bool> _dirty = new();
+    private readonly ConcurrentDictionary<string, ServerData> _data = new(StringComparer.OrdinalIgnoreCase);
+    private CancellationToken _stopping;
+
+    public ServerLive Live(long id) => _live.GetOrAdd(id, _ => new ServerLive());
+
+    public ServerData Data(ServerDefinition def) => _data.GetOrAdd(def.DatabaseFile, f => new ServerData(f));
+
+    /// <summary>Forgets the cached database of a server whose folder moved or was deleted.</summary>
+    public void ForgetData(string databaseFile) => _data.TryRemove(databaseFile, out _);
+
+    // ------------------------------------------------------------------ snapshot for the UI
+
+    public object Snapshot(long id)
+    {
+        var l = Live(id);
+        lock (l.Gate)
+        {
+            return new
+            {
+                id,
+                connected = l.Connected,
+                modVersion = l.ModVersion,
+                linkError = l.LinkError,
+                cpuPercent = Math.Round(l.CpuPercent, 1),
+                memoryBytes = l.MemoryBytes,
+                processCount = l.ProcessCount,
+                fps = l.DediFps,
+                dediMemoryMb = l.DediMemoryMb,
+                uptime = l.DediUptime,
+                players = l.Players.Values.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(p => new
+                {
+                    p.Id, p.SteamId, p.Name, p.Playfield, p.FactionId,
+                    faction = p.FactionId != 0 && l.Factions.TryGetValue(p.FactionId, out var f) ? f : null,
+                    p.Ping, p.Health, p.HealthMax, p.Credits, p.Level, p.Exp,
+                    x = Math.Round(p.X), y = Math.Round(p.Y), z = Math.Round(p.Z), p.OnlineSinceUtc,
+                }).ToList(),
+                playfields = l.Playfields.Values.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(p => new
+                {
+                    p.Name, p.ProcessId, p.Players, fps = Math.Round(p.Fps, 1), p.MemoryMb, p.Structures, p.Mobs, p.UptimeSeconds,
+                }).ToList(),
+            };
+        }
+    }
+
+    public IReadOnlyList<ChatEntry> Chat(long id, int limit, long? beforeId)
+    {
+        var def = store.Find(id) ?? throw new ServerException("not_found");
+        return Data(def).RecentChat(limit, beforeId);
+    }
+
+    // ------------------------------------------------------------------ sending messages
+
+    /// <summary>
+    /// mode "chat": message in the global chat; "popup": message box on the players' screen
+    /// (all players, or one player when <paramref name="playerId"/> is set).
+    /// </summary>
+    public async Task<ChatEntry?> SendAsync(long id, string text, string mode, int? playerId, string by)
+    {
+        var def = store.Find(id) ?? throw new ServerException("not_found");
+        text = (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+        if (text.Length == 0) throw new ServerException("message_empty");
+        if (text.Length > 300) throw new ServerException("message_too_long");
+        var rt = manager.Runtime(id);
+        if (rt.State != ServerState.Running) throw new ServerException("server_not_running");
+        _links.TryGetValue(id, out var link);
+
+        if (mode == "popup")
+        {
+            if (link is null) throw new ServerException("mod_not_connected");
+            if (playerId is { } pid) await link.SendAsync(new { op = "msg_player", id = pid, text, prio = 1, secs = 10 });
+            else await link.SendAsync(new { op = "msg_all", text, prio = 1, secs = 10 });
+            ServerManager.ServerLog(def, $"Message box from {by}{(playerId is null ? "" : $" to player {playerId}")}: {text}");
+            return null;
+        }
+
+        var safe = text.Replace("'", "’");
+        var l = Live(id);
+        lock (l.Gate)
+        {
+            l.RecentlySent.RemoveAll(x => DateTime.UtcNow - x.At > TimeSpan.FromSeconds(30));
+            l.RecentlySent.Add((DateTime.UtcNow, safe));
+        }
+        if (link is not null) await link.SendAsync(new { op = "console", cmd = $"say '{safe}'" });
+        else await manager.ConsoleAsync(id, $"say '{safe}'", by);
+        var entry = Data(def).AddChat(DateTime.UtcNow, "Global", -1, by, null, -1, safe, "eam");
+        await hub.BroadcastAsync(new { type = "chat", id, msg = entry }, CancellationToken.None);
+        return entry;
+    }
+
+    // ------------------------------------------------------------------ main loop
+
+    protected override async Task ExecuteAsync(CancellationToken stop)
+    {
+        _stopping = stop;
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        var tick = 0;
+        while (await timer.WaitForNextTickAsync(stop))
+        {
+            tick++;
+            foreach (var def in store.List())
+            {
+                try
+                {
+                    if (tick % 5 == 0) await WatchAsync(def, tick);
+                    if (_dirty.TryRemove(def.Id, out _))
+                        await hub.BroadcastAsync(new { type = "live", id = def.Id, data = Snapshot(def.Id) }, stop);
+                }
+                catch (Exception e) when (e is not OperationCanceledException) { log.LogWarning(e, "Live watch of '{Name}' failed", def.Name); }
+            }
+        }
+    }
+
+    private async Task WatchAsync(ServerDefinition def, int tick)
+    {
+        var rt = manager.Runtime(def.Id);
+        var l = Live(def.Id);
+        var up = rt.State is ServerState.Running or ServerState.Starting or ServerState.Stopping;
+
+        if (!up)
+        {
+            await DropLinkAsync(def.Id);
+            lock (l.Gate)
+            {
+                if (l.ProcessCount == 0 && l.Players.Count == 0 && l.Playfields.Count == 0 && !l.Connected) return;
+                l.Players.Clear(); l.Playfields.Clear();
+                l.Connected = false; l.CpuPercent = 0; l.MemoryBytes = 0; l.ProcessCount = 0;
+                l.DediFps = null; l.DediMemoryMb = null; l.DediUptime = null;
+            }
+            _dirty[def.Id] = true;
+            return;
+        }
+
+        SampleProcesses(def, l);
+        _dirty[def.Id] = true;
+
+        if (!_linkTasks.ContainsKey(def.Id) && rt.State == ServerState.Running && def.ModKey.Length > 0)
+            _linkTasks[def.Id] = Task.Run(() => LinkLoopAsync(def));
+
+        if (_links.TryGetValue(def.Id, out var link))
+        {
+            try
+            {
+                if (tick % 10 == 0) { await link.SendAsync(new { op = "players" }); await link.SendAsync(new { op = "dedi" }); }
+                if (tick % 30 == 0)
+                {
+                    await link.SendAsync(new { op = "playfields" });
+                    string[] pfs;
+                    lock (l.Gate) pfs = l.Playfields.Keys.ToArray();
+                    foreach (var pf in pfs) await link.SendAsync(new { op = "pfstats", pf });
+                }
+                if (tick % 300 == 0) await link.SendAsync(new { op = "factions" });
+            }
+            catch (Exception e) { log.LogDebug("Link send failed: {Err}", e.Message); }
+        }
+    }
+
+    private static void SampleProcesses(ServerDefinition def, ServerLive l)
+    {
+        var procs = ServerManager.FindGameProcesses(def);
+        try
+        {
+            long mem = 0;
+            var cpu = TimeSpan.Zero;
+            foreach (var p in procs)
+            {
+                try { p.Refresh(); mem += p.WorkingSet64; cpu += p.TotalProcessorTime; } catch { }
+            }
+            var now = DateTime.UtcNow;
+            lock (l.Gate)
+            {
+                if (l.LastCpuSample != default && cpu >= l.LastCpu)
+                {
+                    var wall = (now - l.LastCpuSample).TotalMilliseconds * Environment.ProcessorCount;
+                    l.CpuPercent = wall > 0 ? Math.Clamp(100 * (cpu - l.LastCpu).TotalMilliseconds / wall, 0, 100) : 0;
+                }
+                l.LastCpu = cpu;
+                l.LastCpuSample = now;
+                l.MemoryBytes = mem;
+                l.ProcessCount = procs.Count;
+            }
+        }
+        finally { foreach (var p in procs) p.Dispose(); }
+    }
+
+    private async Task DropLinkAsync(long id)
+    {
+        if (_links.TryRemove(id, out var link)) await link.DisposeAsync();
+    }
+
+    // ------------------------------------------------------------------ link with the mod
+
+    private async Task LinkLoopAsync(ServerDefinition def)
+    {
+        var l = Live(def.Id);
+        try
+        {
+            while (!_stopping.IsCancellationRequested && manager.Runtime(def.Id).State == ServerState.Running)
+            {
+                LinkClient link;
+                try
+                {
+                    link = await LinkClient.ConnectAsync(def.ModPort, def.ModKey, _stopping);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    SetLinkError(l, def.Id, "mod_key_rejected");
+                    await Task.Delay(TimeSpan.FromSeconds(30), _stopping);
+                    continue;
+                }
+                catch (Exception)
+                {
+                    // The mod starts with the game: it may not listen yet.
+                    SetLinkError(l, def.Id, "mod_not_reachable");
+                    await Task.Delay(TimeSpan.FromSeconds(5), _stopping);
+                    continue;
+                }
+
+                _links[def.Id] = link;
+                lock (l.Gate) { l.Connected = true; l.LinkError = null; l.ConnectedUtc = DateTime.UtcNow; }
+                ServerManager.ServerLog(def, "EAM mod connected");
+                _dirty[def.Id] = true;
+                try
+                {
+                    foreach (var op in new[] { "factions", "players", "playfields", "dedi" }) await link.SendAsync(new { op });
+                    while (true)
+                    {
+                        var msg = await link.ReceiveAsync(_stopping);
+                        if (msg is null) break;
+                        await HandleAsync(def, l, link, msg.Value);
+                    }
+                }
+                catch (Exception e) when (e is not OperationCanceledException) { log.LogDebug("Link of '{Name}' closed: {Err}", def.Name, e.Message); }
+                finally
+                {
+                    _links.TryRemove(def.Id, out _);
+                    await link.DisposeAsync();
+                    lock (l.Gate) { l.Connected = false; }
+                    _dirty[def.Id] = true;
+                    ServerManager.ServerLog(def, "EAM mod disconnected");
+                }
+                await Task.Delay(TimeSpan.FromSeconds(3), _stopping);
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally { _linkTasks.TryRemove(def.Id, out _); }
+    }
+
+    private void SetLinkError(ServerLive l, long id, string code)
+    {
+        lock (l.Gate)
+        {
+            if (l.LinkError == code) return;
+            l.LinkError = code;
+        }
+        _dirty[id] = true;
+    }
+
+    private async Task HandleAsync(ServerDefinition def, ServerLive l, LinkClient link, JsonElement m)
+    {
+        var ev = Str(m, "ev");
+        switch (ev)
+        {
+            case "hello":
+                lock (l.Gate) l.ModVersion = Str(m, "mod");
+                break;
+
+            case "player_connected":
+                await link.SendAsync(new { op = "player", id = Int(m, "id") });
+                break;
+
+            case "player_disconnected":
+            {
+                var id = Int(m, "id");
+                LivePlayer? gone;
+                lock (l.Gate) { l.Players.Remove(id, out gone); }
+                if (gone?.SteamId is { } steam)
+                    Data(def).PlayerSeen(steam, gone.Id, gone.Name, (long)(DateTime.UtcNow - gone.PlaytimeCountedUtc).TotalSeconds);
+                if (gone is not null) await hub.BroadcastAsync(new { type = "player_left", id = def.Id, name = gone.Name }, CancellationToken.None);
+                break;
+            }
+
+            case "player_list":
+            {
+                var ids = m.TryGetProperty("ids", out var arr) && arr.ValueKind == JsonValueKind.Array
+                    ? arr.EnumerateArray().Select(x => x.GetInt32()).ToHashSet() : [];
+                lock (l.Gate)
+                {
+                    foreach (var gone in l.Players.Keys.Where(k => !ids.Contains(k)).ToList()) l.Players.Remove(gone);
+                }
+                foreach (var id in ids) await link.SendAsync(new { op = "player", id });
+                break;
+            }
+
+            case "player_info":
+            {
+                var id = Int(m, "id");
+                bool isNew;
+                LivePlayer p;
+                long addSeconds;
+                lock (l.Gate)
+                {
+                    isNew = !l.Players.TryGetValue(id, out var existing);
+                    p = existing ?? new LivePlayer { Id = id };
+                    p.SteamId = Str(m, "steamId");
+                    p.Name = Str(m, "name") ?? p.Name;
+                    p.Playfield = Str(m, "pf");
+                    p.FactionId = Int(m, "factionId");
+                    p.Ping = Int(m, "ping");
+                    p.Health = (float)Num(m, "health");
+                    p.HealthMax = (float)Num(m, "healthMax");
+                    p.Credits = Num(m, "credits");
+                    p.Level = Int(m, "upgrade");
+                    p.Exp = Int(m, "exp");
+                    p.X = (float)Num(m, "x"); p.Y = (float)Num(m, "y"); p.Z = (float)Num(m, "z");
+                    var now = DateTime.UtcNow;
+                    addSeconds = isNew ? 0 : (long)(now - p.PlaytimeCountedUtc).TotalSeconds;
+                    p.PlaytimeCountedUtc = now;
+                    l.Players[id] = p;
+                }
+                if (p.SteamId is { Length: > 0 } s) Data(def).PlayerSeen(s, id, p.Name, addSeconds);
+                if (isNew) await hub.BroadcastAsync(new { type = "player_joined", id = def.Id, name = p.Name }, CancellationToken.None);
+                break;
+            }
+
+            case "player_playfield":
+                lock (l.Gate) { if (l.Players.TryGetValue(Int(m, "id"), out var pp)) pp.Playfield = Str(m, "pf"); }
+                break;
+
+            case "playfield_list":
+            {
+                var names = m.TryGetProperty("list", out var arr) && arr.ValueKind == JsonValueKind.Array
+                    ? arr.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => x.Length > 0).ToList() : [];
+                lock (l.Gate)
+                {
+                    foreach (var gone in l.Playfields.Keys.Where(k => !names.Contains(k, StringComparer.OrdinalIgnoreCase)).ToList()) l.Playfields.Remove(gone);
+                    foreach (var n in names) if (!l.Playfields.ContainsKey(n)) l.Playfields[n] = new LivePlayfield { Name = n };
+                }
+                foreach (var pf in names) await link.SendAsync(new { op = "pfstats", pf });
+                break;
+            }
+
+            case "playfield_loaded":
+            {
+                var name = Str(m, "pf") ?? "";
+                lock (l.Gate) { l.Playfields[name] = new LivePlayfield { Name = name, ProcessId = Int(m, "pid") }; }
+                await link.SendAsync(new { op = "pfstats", pf = name });
+                break;
+            }
+
+            case "playfield_unloaded":
+                lock (l.Gate) l.Playfields.Remove(Str(m, "pf") ?? "");
+                break;
+
+            case "playfield_stats":
+            {
+                var name = Str(m, "pf") ?? "";
+                lock (l.Gate)
+                {
+                    if (!l.Playfields.TryGetValue(name, out var pf)) l.Playfields[name] = pf = new LivePlayfield { Name = name };
+                    pf.ProcessId = Int(m, "pid");
+                    pf.Players = Int(m, "players");
+                    pf.Fps = (float)Num(m, "fps");
+                    pf.MemoryMb = Int(m, "mem");
+                    pf.Structures = Int(m, "structs");
+                    pf.Mobs = Int(m, "mobs");
+                    pf.UptimeSeconds = Int(m, "uptime");
+                }
+                break;
+            }
+
+            case "dedi":
+                lock (l.Gate) { l.DediFps = (float)Num(m, "fps"); l.DediMemoryMb = Int(m, "mem"); l.DediUptime = Int(m, "uptime"); }
+                break;
+
+            case "factions":
+                if (m.TryGetProperty("list", out var fl) && fl.ValueKind == JsonValueKind.Array)
+                    lock (l.Gate)
+                        foreach (var f in fl.EnumerateArray())
+                            l.Factions[Int(f, "id")] = Str(f, "abbrev") is { Length: > 0 } a ? a : Str(f, "name") ?? "";
+                break;
+
+            case "chat":
+                await OnChatAsync(def, l, m);
+                return; // the chat message itself is pushed, no need for a full snapshot
+
+            case "error":
+                log.LogDebug("Mod of '{Name}' reported {Code} for {Op}", def.Name, Str(m, "code"), Str(m, "op"));
+                return;
+
+            default:
+                return;
+        }
+        _dirty[def.Id] = true;
+    }
+
+    private async Task OnChatAsync(ServerDefinition def, ServerLive l, JsonElement m)
+    {
+        var text = Str(m, "text") ?? "";
+        if (text.Length == 0) return;
+        var senderId = Int(m, "sender");
+        var senderType = Str(m, "senderType") ?? "Player";
+        string name;
+        string? steam = null;
+        lock (l.Gate)
+        {
+            if (senderType != "Player")
+            {
+                // Our own "say" comes back from the game: already recorded with the admin's name.
+                l.RecentlySent.RemoveAll(x => DateTime.UtcNow - x.At > TimeSpan.FromSeconds(30));
+                if (l.RecentlySent.Any(x => text.Contains(x.Text, StringComparison.Ordinal))) return;
+                name = Str(m, "name") is { Length: > 0 } n ? n : "Server";
+            }
+            else if (l.Players.TryGetValue(senderId, out var p)) { name = p.Name; steam = p.SteamId; }
+            else name = Str(m, "name") is { Length: > 0 } n2 ? n2 : $"#{senderId}";
+        }
+        var entry = Data(def).AddChat(DateTime.UtcNow, Str(m, "channel") ?? "Global", senderId, name, steam, Int(m, "recipient", -1), text, "game");
+        await hub.BroadcastAsync(new { type = "chat", id = def.Id, msg = entry }, CancellationToken.None);
+    }
+
+    private static string? Str(JsonElement e, string k) =>
+        e.TryGetProperty(k, out var v) ? v.ValueKind switch
+        {
+            JsonValueKind.String => v.GetString(),
+            JsonValueKind.Number => v.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null,
+        } : null;
+
+    private static double Num(JsonElement e, string k) =>
+        e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+
+    private static int Int(JsonElement e, string k, int fallback = 0) =>
+        e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? (int)v.GetDouble() : fallback;
+}

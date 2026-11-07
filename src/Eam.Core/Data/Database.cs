@@ -11,14 +11,19 @@ public sealed class Database
 {
     private readonly string _connectionString;
 
-    public Database(string file)
+    private readonly string[] _migrations;
+
+    public Database(string file) : this(file, Migrations) { }
+
+    public Database(string file, string[] migrations, bool pooling = true)
     {
+        _migrations = migrations;
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = file,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Cache = SqliteCacheMode.Private,
-            Pooling = true,
+            Pooling = pooling,
         }.ToString();
     }
 
@@ -71,6 +76,10 @@ public sealed class Database
             created_utc      TEXT NOT NULL
         );
         """,
+        // 3: secret key of each server's EAM mod
+        """
+        ALTER TABLE servers ADD COLUMN mod_key TEXT NOT NULL DEFAULT '';
+        """,
     ];
 
     public void Migrate()
@@ -80,12 +89,12 @@ public sealed class Database
         {
             cmd.CommandText = "PRAGMA user_version;";
             var current = Convert.ToInt32(cmd.ExecuteScalar());
-            for (var i = current; i < Migrations.Length; i++)
+            for (var i = current; i < _migrations.Length; i++)
             {
                 using var tx = c.BeginTransaction();
                 using var m = c.CreateCommand();
                 m.Transaction = tx;
-                m.CommandText = Migrations[i] + $"\nPRAGMA user_version = {i + 1};";
+                m.CommandText = _migrations[i] + $"\nPRAGMA user_version = {i + 1};";
                 m.ExecuteNonQuery();
                 tx.Commit();
             }

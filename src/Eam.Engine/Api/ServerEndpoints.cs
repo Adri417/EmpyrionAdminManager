@@ -7,6 +7,7 @@ public sealed record RenameRequest(string Name);
 public sealed record StopRequest(int DelayMinutes, string? Message);
 public sealed record DeleteServerRequest(bool DeleteFiles, string ConfirmName);
 public sealed record ConsoleRequest(string Command);
+public sealed record ChatRequest(string Text, string? Mode, int? PlayerId);
 
 public static class ServerEndpoints
 {
@@ -44,6 +45,13 @@ public static class ServerEndpoints
 
         g.MapPost("/{id:long}/console", (long id, ConsoleRequest req, ServerManager m, HttpContext c) =>
             Run(async () => new { output = await m.ConsoleAsync(id, req.Command, By(c)) })).RequireAuthorization(Roles.Admin);
+
+        // Step 3: live view (players, playfields, performance) and chat.
+        g.MapGet("/{id:long}/live", (long id, LiveService l) => Results.Ok(l.Snapshot(id))).RequireAuthorization(Roles.Viewer);
+        g.MapGet("/{id:long}/chat", (long id, long? before, int? limit, LiveService l) =>
+            Run(() => Task.FromResult<object>(l.Chat(id, limit ?? 100, before)))).RequireAuthorization(Roles.Viewer);
+        g.MapPost("/{id:long}/chat", (long id, ChatRequest req, LiveService l, HttpContext c) =>
+            Run(async () => (object?)await l.SendAsync(id, req.Text, req.Mode ?? "chat", req.PlayerId, By(c)) ?? Ok)).RequireAuthorization(Roles.Moderator);
 
         g.MapGet("/{id:long}/logs", (long id, string? kind, int? lines, ServerManager m) =>
             Run(() => Task.FromResult<object>(new

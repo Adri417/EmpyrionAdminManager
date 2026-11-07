@@ -13,6 +13,8 @@ dedicated servers from a Windows desktop app or a browser.
 | Engine | `src/Eam.Engine` | ASP.NET Core service (Windows service or portable). Serves the interface and the API, runs scheduled jobs. |
 | Core | `src/Eam.Core` | Configuration, database, accounts, monitoring. No UI. |
 | Desktop | `src/Eam.Desktop` | Small WinForms window hosting the same interface with WebView2. Starts the engine if needed. |
+| Game mod | `src/Eam.Mod` | Loaded by each Empyrion dedicated server (.NET Framework 4.8). Talks to the engine on 127.0.0.1 only, authenticated with a per-server key. Installed automatically by the engine at every start. |
+| Link | `src/Eam.Link` | Protocol shared by the engine and the mod (handshake, tiny JSON). |
 | Interface | `src/Eam.Engine/wwwroot` | Plain HTML/CSS/JavaScript modules, no framework, no build step. Strict CSP. |
 | Tests | `tests/Eam.Tests` | xUnit tests. |
 

@@ -12,7 +12,8 @@ namespace Eam.Engine.Api;
 /// </summary>
 public sealed class LiveHub(SystemMonitor monitor, ILogger<LiveHub> log) : BackgroundService
 {
-    private readonly ConcurrentDictionary<Guid, WebSocket> _clients = new();
+    private sealed record Client(WebSocket Socket, SemaphoreSlim Gate);
+    private readonly ConcurrentDictionary<Guid, Client> _clients = new();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public int ClientCount => _clients.Count;
@@ -31,10 +32,11 @@ public sealed class LiveHub(SystemMonitor monitor, ILogger<LiveHub> log) : Backg
 
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
         var id = Guid.NewGuid();
-        _clients[id] = ws;
+        var client = new Client(ws, new SemaphoreSlim(1, 1));
+        _clients[id] = client;
         try
         {
-            await SendAsync(ws, new { type = "system", data = monitor.Take() }, ctx.RequestAborted);
+            await SendAsync(client, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "system", data = monitor.Take() }, Json)), ctx.RequestAborted);
             var buf = new byte[1024];
             while (ws.State == WebSocketState.Open)
             {
@@ -66,13 +68,18 @@ public sealed class LiveHub(SystemMonitor monitor, ILogger<LiveHub> log) : Backg
     public async Task BroadcastAsync(object message, CancellationToken ct)
     {
         var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message, Json));
-        foreach (var (id, ws) in _clients)
+        foreach (var (id, client) in _clients)
         {
-            try { await ws.SendAsync(bytes, WebSocketMessageType.Text, true, ct); }
+            try { await SendAsync(client, bytes, ct); }
             catch { _clients.TryRemove(id, out _); }
         }
     }
 
-    private static Task SendAsync(WebSocket ws, object message, CancellationToken ct) =>
-        ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message, Json)), WebSocketMessageType.Text, true, ct);
+    // A WebSocket accepts only one send at a time: messages from different sources are queued per client.
+    private static async Task SendAsync(Client c, byte[] bytes, CancellationToken ct)
+    {
+        await c.Gate.WaitAsync(ct);
+        try { await c.Socket.SendAsync(bytes, WebSocketMessageType.Text, true, ct); }
+        finally { c.Gate.Release(); }
+    }
 }
