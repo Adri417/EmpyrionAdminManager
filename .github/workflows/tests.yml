@@ -1,0 +1,20 @@
+name: Tests
+
+# Runs every test on Windows (the platform EAM runs on) at each push to main,
+# including the anti-corruption stress tests on two servers.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Tests
+        run: dotnet test tests/Eam.Tests --logger "console;verbosity=normal"
