@@ -32,13 +32,16 @@ public static class PortAllocator
     {
         isPortBusy ??= IsPortInUse;
         if (gamePort is < 1024 or > 65530 || telnetPort is < 1024 or > 65535) return "port_out_of_range";
-        var mine = Enumerable.Range(gamePort, GamePortCount).Append(telnetPort).ToArray();
-        if (mine.Distinct().Count() != mine.Length) return "port_overlap";
+        var game = Enumerable.Range(gamePort, GamePortCount).Append(telnetPort).ToArray();
+        if (game.Distinct().Count() != game.Length) return "port_overlap";
+        var mine = game.Append(ModPortFor(gamePort, telnetPort)).ToArray();
         var taken = others.SelectMany(s => s.AllPorts).ToHashSet();
         if (mine.Any(taken.Contains)) return "port_used_by_server";
         if (mine.Any(isPortBusy)) return "port_used_by_program";
         return null;
     }
+
+    public static int ModPortFor(int gamePort, int telnetPort) => telnetPort == gamePort + 5 ? gamePort + 6 : gamePort + 5;
 
     public static bool IsPortInUse(int port)
     {

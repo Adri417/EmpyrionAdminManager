@@ -63,7 +63,7 @@ public sealed class ServerManager : BackgroundService
         string? yamlValue(string key) => yaml?.Get("ServerConfig", key);
         return new
         {
-            id = s.Id, slug = s.Slug, name = s.Name, rootDir = s.RootDir, gamePort = s.GamePort, telnetPort = s.TelnetPort,
+            id = s.Id, slug = s.Slug, name = s.Name, rootDir = s.RootDir, gamePort = s.GamePort, telnetPort = s.TelnetPort, modPort = s.ModPort,
             branch = s.Branch, autoStart = s.AutoStart, autoRestart = s.AutoRestart, installed = s.Installed, buildId = s.BuildId,
             createdUtc = s.CreatedUtc,
             maxPlayers = int.TryParse(yamlValue("Srv_MaxPlayers"), out var mp) ? mp : (int?)null,
@@ -109,7 +109,7 @@ public sealed class ServerManager : BackgroundService
             {
                 Slug = slug, Name = name, RootDir = root, GamePort = gamePort, TelnetPort = telnetPort,
                 TelnetPassword = NewSecret(), Branch = NormalizeBranch(req.Branch),
-                AutoStart = req.AutoStart, AutoRestart = req.AutoRestart,
+                AutoStart = req.AutoStart, AutoRestart = req.AutoRestart, ModKey = NewModKey(),
             });
             Directory.CreateDirectory(def.GameDir);
             Directory.CreateDirectory(def.LogsDir);
@@ -333,6 +333,7 @@ public sealed class ServerManager : BackgroundService
         if (rt.State is ServerState.Running or ServerState.Starting) throw new ServerException("already_running");
         if (FindGameProcesses(def).Count > 0) throw new ServerException("already_running");
         if (!File.Exists(def.YamlFile)) PrepareYaml(def);
+        def = InstallMod(def);
         var busy = def.AllPorts.Where(PortAllocator.IsPortInUse).ToList();
         if (busy.Count > 0) throw new ServerException("port_used_by_program", string.Join(", ", busy));
 
@@ -668,6 +669,43 @@ public sealed class ServerManager : BackgroundService
         if (description?.Length > 500) throw new ServerException("description_too_long");
         if (password?.Length > 64) throw new ServerException("password_too_long");
     }
+
+    /// <summary>
+    /// Copies the EAM mod shipped with EAM into Content\Mods\EAM of this server, with its own port and key.
+    /// Done at every start, so the mod is always the version that matches the engine.
+    /// </summary>
+    private ServerDefinition InstallMod(ServerDefinition def)
+    {
+        if (def.ModKey.Length < 32) def = _store.Update(def with { ModKey = NewModKey() });
+        var source = Path.Combine(AppContext.BaseDirectory, "mod", "EAM");
+        if (!File.Exists(Path.Combine(source, "EamMod.dll")))
+        {
+            ServerLog(def, "EAM mod files not found next to EAM: live view disabled for this start");
+            return def;
+        }
+        try
+        {
+            Directory.CreateDirectory(def.ModDir);
+            foreach (var file in Directory.GetFiles(source))
+            {
+                var target = Path.Combine(def.ModDir, Path.GetFileName(file));
+                if (!File.Exists(target) || !File.ReadAllBytes(target).AsSpan().SequenceEqual(File.ReadAllBytes(file)))
+                    File.Copy(file, target, overwrite: true);
+            }
+            var cfg = Path.Combine(def.ModDir, "eam-link.cfg");
+            var content = $"# Written by Empyrion Admin Manager. Local link only (127.0.0.1).\r\nport={def.ModPort}\r\nkey={def.ModKey}\r\n";
+            File.WriteAllText(cfg + ".tmp", content);
+            File.Move(cfg + ".tmp", cfg, overwrite: true);
+        }
+        catch (Exception e)
+        {
+            ServerLog(def, "EAM mod could not be installed: " + e.Message);
+            _log.LogWarning("EAM mod could not be installed in '{Name}': {Err}", def.Name, e.Message);
+        }
+        return def;
+    }
+
+    private static string NewModKey() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
     private static string NormalizeBranch(string b) => b == "experimental" ? "experimental" : "public";
 

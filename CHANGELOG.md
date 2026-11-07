@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 (2026-11-07) - Mod EAM et vue en direct / EAM mod and live view
+- Mod EAM écrit à neuf, installé et mis à jour automatiquement dans chaque serveur à chaque démarrage (Content\Mods\EAM).
+- Lien local uniquement (127.0.0.1), une clé secrète différente par serveur, aucun port ouvert sur Internet.
+- Vue en direct : joueurs en ligne (faction, playfield, niveau, ping, temps de connexion), playfields actifs (joueurs, FPS, mémoire, structures), FPS du serveur.
+- Processeur et mémoire utilisés par chaque serveur (tous ses processus).
+- Chat en direct, historique conservé 90 jours dans la base du serveur, envoi d'un message dans le chat ou en fenêtre à l'écran des joueurs.
+- Notifications quand un joueur se connecte ou se déconnecte.
+- Base de données propre à chaque serveur (chat, joueurs vus, temps de jeu).
+
 ## 0.2.0 (2026-11-07) - Serveurs / Servers
 - SteamCMD intégré : téléchargé automatiquement au premier besoin, dans le dossier d'EAM.
 - Création d'un serveur avec le nom de son choix (nom EAM, dossier et nom dans la liste du jeu), renommable ensuite.

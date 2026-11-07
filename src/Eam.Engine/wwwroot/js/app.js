@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { t, setLanguage, errorText } from "./i18n.js";
 import { html, raw, mount, $, $$, toast, formatBytes, timeSpanSeconds } from "./dom.js";
 import { initServers, serverEvent, loadServers, renderServerList, renderServerDetail, dashboardServers, setServersListener } from "./servers.js";
+import { playerCount } from "./live.js";
 
 const app = document.getElementById("app");
 const state = { status: null, me: null, socket: null, system: null };
@@ -162,7 +163,7 @@ function openSocket() {
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === "system") { state.system = msg.data; updateDashboard(); }
-    else if (msg.type === "server" || msg.type === "servers") serverEvent(msg);
+    else serverEvent(msg);
   };
   ws.onclose = () => {
     setLive(false);
@@ -245,6 +246,7 @@ function drawDashServers() {
   mount(el, html`<table><tbody>${list.map((s) => html`<tr>
     <td><a href="#/server/${s.id}"><b>${s.name}</b></a></td>
     <td><span class="state ${cls(s.state)}">${t("state_" + s.state)}</span></td>
+    <td>${s.state === "Running" && playerCount(s.id) != null ? `${playerCount(s.id)} ${t("col_players").toLowerCase()}` : ""}</td>
     <td class="hint">${s.gamePort}-${s.gamePort + 3}</td></tr>`)}</tbody></table>`);
 }
 

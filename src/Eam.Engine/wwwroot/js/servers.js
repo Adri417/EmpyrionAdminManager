@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { t, extend, errorText } from "./i18n.js";
 import { html, raw, mount, $, $$, toast } from "./dom.js";
+import { liveEvent, fetchLive, renderLive, renderChat, playerCount, live } from "./live.js";
 
 extend({
   fr: {
@@ -87,6 +88,10 @@ export function initServers(me) { store.me = me; }
 
 /** Called by the live socket. */
 export function serverEvent(msg) {
+  if (liveEvent(msg, (id) => store.servers.find((s) => s.id === id)?.name ?? "")) {
+    if (msg.type === "live") store.onChange?.();
+    return;
+  }
   if (msg.type === "server") {
     const i = store.servers.findIndex((s) => s.id === msg.data.id);
     if (i >= 0) store.servers[i] = msg.data; else store.servers.push(msg.data);
@@ -97,6 +102,7 @@ export function serverEvent(msg) {
 
 export async function loadServers() {
   try { store.servers = await api.get("/api/servers"); } catch { store.servers = []; }
+  await Promise.all(store.servers.filter((s) => s.state === "Running" && !live.snapshots[s.id]).map((s) => fetchLive(s.id)));
   store.onChange?.();
   return store.servers;
 }
@@ -130,7 +136,7 @@ export async function renderServerList(page) {
         : html`<div class="grid servers">${store.servers.map((s) => html`
           <a class="card server-card" href="#/server/${s.id}">
             <div class="server-head"><b>${s.name}</b>${stateBadge(s)}</div>
-            <div class="hint">${t("ports")} ${s.gamePort}-${s.gamePort + 3} · ${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}</div>
+            <div class="hint">${t("ports")} ${s.gamePort}-${s.gamePort + 3} · ${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}${s.state === "Running" && playerCount(s.id) != null ? ` · ${playerCount(s.id)} ${t("col_players").toLowerCase()}` : ""}</div>
             ${progressBar(s)}
             ${s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
           </a>`)}</div>`}`);
@@ -189,13 +195,15 @@ async function createDialog() {
 // ---------------------------------------------------------------- detail
 export async function renderServerDetail(page, id, setTitle) {
   let tab = "overview";
+  live.chatListener = null;
   await loadServers();
+  await fetchLive(id);
   const get = () => store.servers.find((s) => s.id === id);
   if (!get()) { location.hash = "#/servers"; return; }
   const admin = atLeast(store.me.role, "admin");
   const owner = atLeast(store.me.role, "owner");
 
-  const shell = () => {
+  const shell = (kept = null) => {
     const s = get();
     if (!s) { location.hash = "#/servers"; return; }
     setTitle(s.name);
@@ -206,13 +214,14 @@ export async function renderServerDetail(page, id, setTitle) {
         ${s.autoRestartSuspended ? html`<div class="error">${t("crash_loop")}</div>` : s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
         <div class="actions-row" id="actions"></div>
       </div>
-      <nav class="tabs">${["overview", ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
+      <nav class="tabs">${["overview", "chat", ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
     applyBars(page);
     drawActions(s);
     $$(".tabs button", page).forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; shell(); }));
-    drawTab(s);
+    if (kept) $("#tab", page).replaceWith(kept);
+    else drawTab(s);
   };
 
   const drawActions = (s) => {
@@ -249,14 +258,18 @@ export async function renderServerDetail(page, id, setTitle) {
   const drawTab = (s) => {
     const el = $("#tab", page);
     if (tab === "overview") {
-      mount(el, html`<div class="card"><dl class="kv">
+      mount(el, html`<div id="live"></div><div class="card"><dl class="kv">
         <dt>${t("folder")}</dt><dd>${s.rootDir}</dd>
-        <dt>${t("ports")}</dt><dd>${s.gamePort}-${s.gamePort + 3} (UDP/TCP) · telnet ${s.telnetPort}</dd>
+        <dt>${t("ports")}</dt><dd>${s.gamePort}-${s.gamePort + 3} (UDP/TCP) · telnet ${s.telnetPort} · mod EAM ${s.modPort}</dd>
         <dt>${t("branch")}</dt><dd>${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}</dd>
         <dt>${t("build")}</dt><dd>${s.buildId || "—"}</dd>
         <dt>${t("srv_max_players")}</dt><dd>${s.maxPlayers ?? "—"}</dd>
         ${s.startedUtc ? html`<dt>${t("since")}</dt><dd>${new Date(s.startedUtc).toLocaleString()}</dd>` : ""}
       </dl></div>`);
+      renderLive($("#live", el), s);
+    } else if (tab === "chat") {
+      if (el.dataset.tab === "chat") return;
+      renderChat(el, s, store.me);
     } else if (tab === "console") {
       if (el.dataset.tab === "console") return; // keep the console content between live updates
       mount(el, html`<div class="card"><div class="hint">${t("console_hint")}</div>
@@ -332,8 +345,7 @@ export async function renderServerDetail(page, id, setTitle) {
     if (!s) { location.hash = "#/servers"; return; }
     const keep = $("#tab", page);
     const kept = keep?.dataset.tab === tab && tab !== "overview" ? keep : null;
-    shell();
-    if (kept) $("#tab", page).replaceWith(kept);
+    shell(kept);
   };
   shell();
 }
