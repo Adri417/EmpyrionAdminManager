@@ -9,7 +9,7 @@ dotnet publish src\Eam.Engine\Eam.Engine.csproj @common
 dotnet publish src\Eam.Desktop\Eam.Desktop.csproj @common
 dotnet build src\Eam.Mod\Eam.Mod.csproj -c Release -o dist\mod-build
 New-Item -ItemType Directory -Force "dist\$name\mod\EAM" | Out-Null
-Copy-Item dist\mod-build\EamMod.dll, dist\mod-build\EAM_Info.yaml "dist\$name\mod\EAM"
+Copy-Item dist\mod-build\EAM.dll, dist\mod-build\EAM_Info.yaml "dist\$name\mod\EAM"
 Copy-Item -Recurse packaging\* "dist\$name"
 Copy-Item LICENSE "dist\$name\LICENSE.txt"
 Copy-Item CHANGELOG.md "dist\$name\CHANGELOG.md"
