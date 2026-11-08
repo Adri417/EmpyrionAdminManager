@@ -203,6 +203,14 @@ public sealed class ServerManager : BackgroundService
             .Select(n => Path.Combine(gameDir, n!)).FirstOrDefault(File.Exists);
         var yaml = yamlFile is null ? DedicatedYaml.Default() : DedicatedYaml.Load(yamlFile);
         var cleanName = CleanName(string.IsNullOrWhiteSpace(name) ? yaml.Get("ServerConfig", "Srv_Name") ?? "Imported server" : name);
+        if (copy)
+        {
+            // Copying a save while the game writes it would give a broken copy: the old server must be stopped first.
+            var running = FindGameProcesses(gameDir);
+            var busy = running.Count > 0;
+            foreach (var p in running) p.Dispose();
+            if (busy) throw new ServerException("import_source_running");
+        }
         await CreateGate.WaitAsync();
         try
         {
@@ -895,7 +903,10 @@ public sealed class ServerManager : BackgroundService
     private static string SafeName(Process p) { try { return p.ProcessName; } catch { return ""; } }
 
     /// <summary>Every Empyrion process (dedicated, launcher, playfields) running from THIS server's folder only.</summary>
-    public static List<Process> FindGameProcesses(ServerDefinition def)
+    public static List<Process> FindGameProcesses(ServerDefinition def) => FindGameProcesses(def.GameDir);
+
+    /// <summary>Every Empyrion process running from this game folder.</summary>
+    public static List<Process> FindGameProcesses(string gameDir)
     {
         var result = new List<Process>();
         foreach (var name in new[] { "EmpyrionDedicated", "EmpyrionPlayfieldServer", "EmpyrionLauncher" })
@@ -904,7 +915,7 @@ public sealed class ServerManager : BackgroundService
             {
                 string? file = null;
                 try { file = p.MainModule?.FileName; } catch { }
-                if (file is not null && IsUnder(file, def.GameDir)) result.Add(p);
+                if (file is not null && IsUnder(file, gameDir)) result.Add(p);
                 else p.Dispose();
             }
         }

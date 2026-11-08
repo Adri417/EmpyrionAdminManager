@@ -3,6 +3,7 @@ import { extend } from "./i18n.js";
 
 extend({
   fr: {
+    err_import_source_running: "L'ancien serveur tourne encore. Arrêtez-le (saveandexit) et fermez EAH avant de le copier, sinon la copie de la sauvegarde serait abîmée.",
     chat_search: "Rechercher dans le chat…", chat_all_channels: "Tous les canaux", chat_autoscroll: "Défilement auto", chat_mode_private: "Message privé", chat_no_match: "Aucun message trouvé.",
     bs_title: "Bannir par SteamID", bs_duration: "Durée", bs_duration_hint: "Exemples : 30m, 12h, 7d, 1y.",
     fa_title: "Factions", fa_abbrev: "Sigle", fa_online: "Membres en ligne", fa_none: "Aucune faction connue (le serveur doit tourner avec le mod EAM).",
@@ -60,6 +61,7 @@ extend({
     err_scenario_delete_failed: "Le scénario n'a pas pu être supprimé.", err_server_running: "Arrêtez le serveur d'abord.", err_unknown_ore: "Minerai inconnu.",
   },
   en: {
+    err_import_source_running: "The old server is still running. Stop it (saveandexit) and close EAH before copying it, otherwise the copy of the save would be damaged.",
     chat_search: "Search the chat…", chat_all_channels: "All channels", chat_autoscroll: "Auto scroll", chat_mode_private: "Private message", chat_no_match: "No message found.",
     bs_title: "Ban by SteamID", bs_duration: "Duration", bs_duration_hint: "Examples: 30m, 12h, 7d, 1y.",
     fa_title: "Factions", fa_abbrev: "Tag", fa_online: "Members online", fa_none: "No faction known yet (the server must run with the EAM mod).",

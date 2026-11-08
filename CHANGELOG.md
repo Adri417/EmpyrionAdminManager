@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.9 (2026-11-08) - Import plus sûr
+- Import EAH en mode « copier » : refusé si l'ancien serveur tourne encore, pour ne jamais copier une sauvegarde en cours d'écriture.
+
 ## 0.9.8 (2026-11-07) - Ce qui manquait encore par rapport à EAH et EWA
 - Chat : recherche dans tout l'historique, filtre par canal, défilement auto activable, couleur par canal, message privé à un joueur connecté.
 - Joueurs : bannir ou débannir par SteamID (même un joueur jamais venu), bouton « Débannir » dans la liste des bannis, liste des factions avec leurs membres en ligne, lien vers le profil Steam.
