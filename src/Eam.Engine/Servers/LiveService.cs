@@ -225,6 +225,34 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
 
     // ------------------------------------------------------------------ sending messages
 
+    /// <summary>The connected EAM mod can write in the chat through the game's chat API (mod 0.9.22 and later).</summary>
+    private static bool ChatApi(ServerLive l0)
+    {
+        string? v;
+        lock (l0.Gate) v = l0.ModVersion;
+        return Version.TryParse(v, out var ver) && ver >= new Version(0, 9, 22);
+    }
+
+    /// <summary>A server line in the global chat (countdowns, announcements). False when the mod is not connected.</summary>
+    public async Task<bool> ServerChatAsync(long id, string text)
+    {
+        if (!_links.TryGetValue(id, out var link)) return false;
+        var safe = text.Replace("'", "’");
+        var l = Live(id);
+        lock (l.Gate)
+        {
+            l.RecentlySent.RemoveAll(x => DateTime.UtcNow - x.At > TimeSpan.FromSeconds(30));
+            l.RecentlySent.Add((DateTime.UtcNow, safe));
+        }
+        try
+        {
+            if (ChatApi(l)) await link.SendAsync(new { op = "chat", text = safe, sender = "Server" });
+            else await link.SendAsync(new { op = "console", cmd = $"say '{safe}'" });
+            return true;
+        }
+        catch { return false; }
+    }
+
     /// <summary>Red alert with the alarm sound to every player (false when the EAM mod is not connected).</summary>
     public async Task<bool> RedAlertAsync(long id, string text)
     {
@@ -259,7 +287,8 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 lp.RecentlySent.Add((DateTime.UtcNow, priv));
             }
             var cmdText = $"say p:{to} '{priv}'";
-            if (link is not null) await link.SendAsync(new { op = "console", cmd = cmdText });
+            if (link is not null && ChatApi(l0: Live(id))) await link.SendAsync(new { op = "chat", text = priv, to, sender = "EAM" });
+            else if (link is not null) await link.SendAsync(new { op = "console", cmd = cmdText });
             else await manager.ConsoleAsync(id, cmdText, by);
             var pe = Data(def).AddChat(DateTime.UtcNow, "SinglePlayer", -1, by, null, to, $"→ {target.Name}: {text.Replace("'", "’")}", "eam");
             await hub.BroadcastAsync(new { type = "chat", id, msg = pe }, CancellationToken.None);
@@ -287,7 +316,9 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
             l.RecentlySent.RemoveAll(x => DateTime.UtcNow - x.At > TimeSpan.FromSeconds(30));
             l.RecentlySent.Add((DateTime.UtcNow, safe));
         }
-        if (link is not null) await link.SendAsync(new { op = "console", cmd = $"say '{safe}'" });
+        // Mod 0.9.22+: one chat line through the game's chat API ("say" is shown twice to the players).
+        if (link is not null && ChatApi(l)) await link.SendAsync(new { op = "chat", text = safe, sender = "Server" });
+        else if (link is not null) await link.SendAsync(new { op = "console", cmd = $"say '{safe}'" });
         else await manager.ConsoleAsync(id, $"say '{safe}'", by);
         var entry = Data(def).AddChat(DateTime.UtcNow, "Global", -1, by, null, -1, stored, "eam");
         await hub.BroadcastAsync(new { type = "chat", id, msg = entry }, CancellationToken.None);

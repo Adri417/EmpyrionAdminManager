@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.22 (2026-11-08) - Messages en double
+- Corrigé : les messages d'EAM dans le chat (arrivées/départs, messages programmés, chat depuis EAM, compte à rebours) s'affichaient 2 fois en jeu. La commande console « say » est affichée deux fois par le jeu : le mod EAM écrit maintenant dans le chat par l'API de chat du jeu (une seule ligne). Repli sur « say » si cette API n'est pas disponible.
+- Le mod EAM est mis à jour au prochain démarrage de chaque serveur.
+
 ## 0.9.21 (2026-11-08) - Inventaire visuel
 - Inventaire des joueurs affiché comme en jeu : barre d'outils (9 cases) et sac (7 × 7), avec l'image de chaque item, la quantité dans le coin et le nom au survol. Mêmes grilles pour les copies de sacs à dos.
 - Les images et les noms viennent du serveur lui-même (scénario de RE1, de RE2…) : images du scénario (SharedData\Content\Bundles\ItemIcons), puis du jeu, puis d'EAH si copié avec le serveur, ou eam\icons pour ajouter les siennes.

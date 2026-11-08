@@ -20,6 +20,8 @@
       <HintPath>..\..\lib\empyrion\Mif.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- Stand-in for the game's ModApi.dll (newer interface, used for chat messages): never shipped. -->
+    <ProjectReference Include="..\Eam.ModApiStub\Eam.ModApiStub.csproj"><Private>false</Private></ProjectReference>
     <Compile Include="..\Eam.Link\*.cs" LinkBase="Link" />
     <None Include="EAM_Info.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

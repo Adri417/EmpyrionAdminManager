@@ -11,9 +11,48 @@ namespace Eam.Mod
     /// port and secret key (eam-link.cfg). It only listens on 127.0.0.1: nothing is opened to the Internet.
     /// It forwards game events to the engine and runs the engine's requests on the game thread.
     /// </summary>
-    public sealed class EamMod : ModInterface
+    public sealed class EamMod : ModInterface, IMod
     {
-        public const string ModVersion = "0.9.5";
+        public const string ModVersion = "0.9.22";
+
+        // Newer mod interface (ModApi.dll): only used to write in the chat like a server, once.
+        // The game may create one instance per interface, hence static.
+        private static object s_modApi;
+
+        public void Init(IModApi modAPI) { s_modApi = modAPI; }
+        public void Shutdown() { s_modApi = null; }
+
+        /// <summary>
+        /// Chat message sent through IApplication.SendChatMessage (reflection: no compile-time link to the real
+        /// ModApi.dll). Returns false when that interface is not available, so the caller can fall back to "say".
+        /// </summary>
+        private static bool SendChat(string text, string sender, int recipient, int channel)
+        {
+            try
+            {
+                var api = s_modApi;
+                if (api == null) return false;
+                var app = api.GetType().GetProperty("Application")?.GetValue(api, null);
+                var send = app?.GetType().GetMethod("SendChatMessage");
+                if (send == null) return false;
+                var type = send.GetParameters()[0].ParameterType;
+                var msg = Activator.CreateInstance(type);
+                void Set(string name, object value)
+                {
+                    var f = type.GetField(name);
+                    if (f != null) f.SetValue(msg, f.FieldType.IsEnum ? Enum.ToObject(f.FieldType, value) : value);
+                    else type.GetProperty(name)?.SetValue(msg, value, null);
+                }
+                Set("Channel", channel);          // 0 Global, 3 SinglePlayer
+                Set("SenderType", 3);             // ServerInfo
+                Set("SenderNameOverride", sender);
+                Set("RecipientEntityId", recipient);
+                Set("Text", text);
+                send.Invoke(app, new[] { msg });
+                return true;
+            }
+            catch { return false; }
+        }
 
         private ModGameAPI _api;
         private LinkServer _link;
@@ -92,6 +131,17 @@ namespace Eam.Mod
                 case "console":
                     Request(CmdId.Request_ConsoleCommand, new PString(r.Str("cmd") ?? ""), rid);
                     break;
+                case "chat":
+                {
+                    // One line in the chat (the console "say" shows it twice to the players).
+                    var text = Text(r);
+                    var to = (int)r.Num("to", -1);
+                    if (SendChat(text, r.Str("sender") ?? "Server", to, to > 0 ? 3 : 0))
+                        _link.Send(Ev("ok", "op", op, "rid", rid));
+                    else
+                        Request(CmdId.Request_ConsoleCommand, new PString(to > 0 ? $"say p:{to} '{text.Replace("'", "’")}'" : $"say '{text.Replace("'", "’")}'"), rid);
+                    break;
+                }
 
                 // ---- step 5: players
                 case "inventory_get": Request(CmdId.Request_Player_GetInventory, new Id(id), rid); break;

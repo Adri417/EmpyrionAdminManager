@@ -1048,12 +1048,16 @@ public sealed class ServerManager : BackgroundService
     /// <summary>Kicks every online player (set by the player service: the manager does not know who is online).</summary>
     public Func<long, string, Task<int>>? KickAllPlayers { get; set; }
 
+    /// <summary>One chat line through the EAM mod (set by the live service; false when not connected).</summary>
+    public Func<long, string, Task<bool>>? ServerChat { get; set; }
+
     /// <summary>Red alert with the alarm sound (set by the live service).</summary>
     public Func<long, string, Task<bool>>? RedAlert { get; set; }
 
     private async Task Announce(ServerDefinition def, string text, bool alert)
     {
         if (alert && RedAlert is { } red && !await red(def.Id, text)) ServerLog(def, "Red alert not sent (EAM mod not connected): chat only");
+        if (ServerChat is { } chat && await chat(def.Id, text)) return;
         await TrySay(def, text);
     }
 
