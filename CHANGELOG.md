@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.17 (2026-11-08) - Chat qui remontait tout seul
+- Corrigé pour de bon : quand un serveur tourne, chaque mise à jour en direct (toutes les quelques secondes) remettait le chat, la console et les journaux tout en haut. Les positions de défilement sont maintenant relevées avant de reconstruire la page. On peut lire les anciens messages à la molette sans être renvoyé ailleurs, et la liste suit les nouveaux messages seulement si on est déjà en bas.
+
 ## 0.9.16 (2026-11-08) - Correctif démarrage après import
 - Corrigé : une clé ajoutée par EAM dans dedicated.yaml (mot de passe telnet...) était décalée de 4 espaces quand le fichier en utilise 2. Empyrion ne pouvait plus lire le fichier et lançait une partie neuve. EAM reprend maintenant le décalage du fichier et répare une clé mal décalée.
 - Le mod de jeu d'EAH (EPF) est aussi mis de côté lors d'un import « copier », en plus de son plugin (EPM).

@@ -231,6 +231,13 @@ export async function renderServerDetail(page, id, setTitle) {
     const top = $("#top-extra");
     if (top) mount(top, html`${stateBadge(s)}<div class="actions-row top-actions" id="actions"></div>`);
     const notice = s.progress != null || s.autoRestartSuspended || s.lastError;
+    // Rebuilding the page resets every scroll position (chat, console, logs, and the page itself): remember them
+    // BEFORE the old content leaves the page (a detached element always reads 0) and put them back afterwards.
+    const ancestors = [];
+    for (let x = page; x; x = x.parentElement) ancestors.push(x);
+    if (document.scrollingElement) ancestors.push(document.scrollingElement);
+    const scrolled = [...ancestors, ...(kept ? [kept, ...kept.querySelectorAll("*")] : [])]
+      .filter((x) => x.scrollTop > 0).map((x) => [x, x.scrollTop]);
     mount(page, html`
       ${notice ? html`<div class="card server-top">
         ${progressBar(s)}
@@ -243,13 +250,10 @@ export async function renderServerDetail(page, id, setTitle) {
     drawActions(s);
     $$(".tabs button", page).forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; shell(); }));
     if (kept) {
-      // Moving an element in the page resets the scroll of everything inside it (chat, console, logs):
-      // remember each scroll position and put it back, so a live update never jumps to the top.
-      const scrolled = [kept, ...kept.querySelectorAll("*")].filter((x) => x.scrollTop > 0).map((x) => [x, x.scrollTop]);
       $("#tab", page).replaceWith(kept);
-      scrolled.forEach(([x, top]) => { x.scrollTop = top; });
     }
     else drawTab(s);
+    scrolled.forEach(([x, top]) => { x.scrollTop = top; });
   };
 
   const drawActions = (s) => {
