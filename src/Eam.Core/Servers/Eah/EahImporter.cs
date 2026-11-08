@@ -623,7 +623,8 @@ public static class EahImporter
                 18 => ("shared_cleanup", new { }),
                 21 => ("limits", new { }),
                 24 => ("cleanup_players", new { days = 90 }),
-                31 => ("wipe", new { wipe = "all", playfields = Pfs(), backupFirst = true }),
+                // EAH's "Wipe all" (A=31) is its periodic POI wipe on the listed playfields ("all" = every playfield).
+                31 => ("wipe", new { wipe = "poi", playfields = Pfs() }),
                 32 => ("wipe", new { wipe = "deposit", playfields = Pfs() }),
                 36 => ("wipe", new { wipe = "poi", playfields = Pfs() }),
                 38 => ("wipe", new { wipe = "terrain", playfields = Pfs() }),
@@ -642,8 +643,6 @@ public static class EahImporter
                 _ => null,
             };
             if (schedule is null) continue;
-            // A full wipe (everything on the playfields) never starts by itself after an import: the admin switches it on.
-            if (action == 31) active = false;
             list.Add(new EahTask(mapped.Value.Kind, active, schedule, mapped.Value.Params, $"A={action} W={repeat}"));
         }
         return list;
@@ -661,7 +660,6 @@ public static class EahImporter
             data.SaveTask(new ScheduledTask(0, t.Kind, t.Enabled, schedule, pars, null, "imported from EAH" + (t.Enabled ? "" : " (was off)")));
             report.Add("tasks");
         }
-        if (TimeTable(configDir).Any(t => t.Source.StartsWith("A=31 "))) report.Notes.Add("Full wipe tasks (\"Wipe all\") are imported switched off: check them before switching them on.");
         if (report.Counts.GetValueOrDefault("tasks") > 0) report.Notes.Add("Tasks keep their EAH state: stop EAH for this server so the two tools never restart or wipe it twice.");
     }
 

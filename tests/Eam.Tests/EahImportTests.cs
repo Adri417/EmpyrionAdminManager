@@ -185,15 +185,15 @@ public class EahImportTests : IDisposable
         // '#'-separated playfields are split; two wipes at the same time stay two tasks; "all" = every playfield.
         var deposit = tasks.Single(t => t.Params.Contains("\"deposit\""));
         Assert.Contains("[\"Akua\",\"Tallodar\",\"Rogue PX-37 Moon 2\"]", deposit.Params);
-        var all = tasks.Single(t => t.Params.Contains("\"wipe\":\"all\""));
-        Assert.Contains("[\"*\"]", all.Params);
+        // EAH "Wipe all" (A=31) = POI wipe; P="all" = every playfield.
+        var all = tasks.Single(t => t.Params.Contains("\"wipe\":\"poi\"") && t.Params.Contains("[\"*\"]"));
         Assert.False(all.Enabled);
         // Monthly stays monthly.
         Assert.Contains("\"monthly\"", tasks.Single(t => t.Kind == "backup").Schedule);
         var restart = tasks.Single(t => t.Kind == "restart");
         Assert.Contains("\"backupFirst\":true", restart.Params);
         Assert.Contains("04:00", restart.Schedule);
-        var wipe = tasks.Single(t => t.Kind == "wipe" && t.Params.Contains("\"poi\""));
+        var wipe = tasks.Single(t => t.Kind == "wipe" && t.Params.Contains("Omicron"));
         Assert.Contains("Omicron", wipe.Params);
         Assert.Contains("\"days\":[1]", wipe.Schedule);
         Assert.Contains("\"minutes\":120", tasks.Single(t => t.Kind == "message").Schedule);

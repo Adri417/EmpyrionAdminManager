@@ -3,7 +3,7 @@
 ## 0.9.15 (2026-11-08) - Import « copier » plus sûr
 - Le dossier de sauvegarde (SaveDirectory) de l'ancien serveur est redirigé vers la copie : la copie ne joue jamais sur la sauvegarde de l'original.
 - Le plugin d'EAH copié avec le serveur est mis de côté (pas effacé), puisqu'EAM remplace EAH.
-- Les tâches EAH « Wipe all » arrivent toujours désactivées, avec un avertissement.
+- Les tâches EAH « Wipe all » deviennent des wipes de POI (c'est ce qu'elles font dans EAH), « all » = tous les playfields.
 
 ## 0.9.14 (2026-11-08) - 100 % portable
 - Tout reste dans le dossier d'EAM (`data` à côté des .exe) : réglages, comptes, journaux, certificats, clés, SteamCMD, mises à jour et serveurs par défaut. Plus rien dans C:\ProgramData, rien sur un autre disque sans votre choix.
