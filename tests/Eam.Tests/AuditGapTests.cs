@@ -82,3 +82,31 @@ public class MonthlyScheduleTests
         Assert.Throws<FormatException>(() => Schedule.Parse("{\"type\":\"monthly\",\"times\":[\"03:00\"],\"day\":31}"));
     }
 }
+
+public class PortableMigrationTests
+{
+    [Fact]
+    public void OldProgramDataIsCopiedOnceAndKept()
+    {
+        using var dir = new TempDir();
+        var old = Path.Combine(dir.Path, "programdata");
+        var now = Path.Combine(dir.Path, "eam", "data");
+        Directory.CreateDirectory(Path.Combine(old, "keys"));
+        Directory.CreateDirectory(Path.Combine(old, "servers", "re2", "game"));
+        File.WriteAllText(Path.Combine(old, "eam.db"), "db");
+        File.WriteAllText(Path.Combine(old, "eam.json"), "{}");
+        File.WriteAllText(Path.Combine(old, "keys", "k.xml"), "key");
+        File.WriteAllText(Path.Combine(old, "servers", "re2", "game", "big.bin"), "x");
+
+        Eam.Core.Config.EamPaths.MigrateFrom(old, now);
+        Assert.Equal("db", File.ReadAllText(Path.Combine(now, "eam.db")));
+        Assert.True(File.Exists(Path.Combine(now, "keys", "k.xml")));
+        Assert.False(Directory.Exists(Path.Combine(now, "servers")));   // game servers are not copied
+        Assert.True(File.Exists(Path.Combine(old, "eam.db")));           // the old folder is kept
+
+        // Never a second time: the new data wins.
+        File.WriteAllText(Path.Combine(now, "eam.db"), "new");
+        Eam.Core.Config.EamPaths.MigrateFrom(old, now);
+        Assert.Equal("new", File.ReadAllText(Path.Combine(now, "eam.db")));
+    }
+}

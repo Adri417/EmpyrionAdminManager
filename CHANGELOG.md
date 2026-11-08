@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.14 (2026-11-08) - 100 % portable
+- Tout reste dans le dossier d'EAM (`data` à côté des .exe) : réglages, comptes, journaux, certificats, clés, SteamCMD, mises à jour et serveurs par défaut. Plus rien dans C:\ProgramData, rien sur un autre disque sans votre choix.
+- Au premier démarrage, les réglages et comptes d'une ancienne version sont recopiés depuis C:\ProgramData\EmpyrionAdminManager (sans les serveurs de jeu). L'ancien dossier n'est pas effacé.
+- Le fichier portable.txt n'est plus nécessaire.
+
 ## 0.9.13 (2026-11-08) - Dossier des serveurs au choix
 - Les nouveaux serveurs ne vont plus dans C:\ProgramData : par défaut à côté du programme EAM (ex. F:\EAM\servers), ou dans le dossier choisi dans Paramètres.
 - Import « copier » : choix du dossier de destination, taille à copier et place libre affichées, refus clair s'il manque de la place.

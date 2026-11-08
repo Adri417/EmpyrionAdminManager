@@ -261,9 +261,10 @@ Scheduled tasks are imported switched off. **Stop EAH and the old server before 
 
 ## Where the data lives
 
-- Installed mode: `C:\ProgramData\EmpyrionAdminManager`.
-- Portable mode: the `data` folder next to the `.exe` files, when a `portable.txt` file is present.
+- EAM is portable: everything is in the `data` folder next to the `.exe` files (settings, accounts, logs, certificates, SteamCMD and, by default, the servers). Nothing goes to another drive unless you choose it.
+- Only if that folder cannot be written (EAM placed in `Program Files`): `C:\ProgramData\EmpyrionAdminManager`.
 - Or the folder given by the `EAM_DATA` environment variable.
+- Coming from 0.9.13 or older: at the first start EAM copies its settings and accounts from `C:\ProgramData\EmpyrionAdminManager` into `data`. The old folder is not deleted: remove it yourself once everything works.
 
 Inside: `eam.json` (settings), `eam.db` (accounts), `logs\`, `keys\`, `certificates\`, `steamcmd\`, and one folder per server in `servers\<name>\` with `game\`, `eam\` (database and logs) and `backups\`.
 
@@ -571,8 +572,9 @@ Les tâches planifiées sont importées désactivées. **Arrêtez EAH et l'ancie
 
 ## Où sont les données
 
-- Mode installé : `C:\ProgramData\EmpyrionAdminManager`.
-- Mode portable : le dossier `data` à côté des `.exe`, quand un fichier `portable.txt` est présent.
+- EAM est portable : tout est dans le dossier `data` à côté des `.exe` (réglages, comptes, journaux, certificats, SteamCMD et, par défaut, les serveurs). Rien ne va sur un autre disque sans votre choix.
+- Seulement si ce dossier n'est pas modifiable (EAM placé dans `Program Files`) : `C:\ProgramData\EmpyrionAdminManager`.
+- Depuis la 0.9.13 ou avant : au premier démarrage, EAM recopie ses réglages et comptes de `C:\ProgramData\EmpyrionAdminManager` vers `data`. L'ancien dossier n'est pas effacé : supprimez-le vous-même quand tout marche.
 - Ou le dossier donné par la variable d'environnement `EAM_DATA`.
 
 Dedans : `eam.json` (paramètres), `eam.db` (comptes), `logs\`, `keys\`, `certificates\`, `steamcmd\`, et un dossier par serveur dans `servers\<nom>\` avec `game\`, `eam\` (base et journaux) et `backups\`.
