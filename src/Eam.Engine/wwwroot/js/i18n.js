@@ -127,8 +127,15 @@ export function t(key, ...args) {
 
 export function errorText(code, extra) {
   if (code === "too_many_attempts") return t("err_too_many_attempts", Math.ceil((extra?.retryAfterSeconds ?? 900) / 60));
-  const key = "err_" + code;
-  return dict[lang][key] ? t(key) : t("err_generic");
+  // "code: detail" (server-side errors kept with their detail): the known text, then the detail.
+  const str = String(code ?? "");
+  const i = str.indexOf(": ");
+  const base = i > 0 ? str.slice(0, i) : str;
+  const detail = i > 0 ? str.slice(i + 2) : "";
+  const key = "err_" + base;
+  if (dict[lang][key]) return detail ? `${t(key)} (${detail})` : t(key);
+  // Unknown code: never hide it behind a vague message.
+  return str && str !== "undefined" && str !== "x" ? `${t("err_generic")} (${str})` : t("err_generic");
 }
 
 export const currentLanguage = () => lang;

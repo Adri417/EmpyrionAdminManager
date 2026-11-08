@@ -3,6 +3,7 @@ import { extend } from "./i18n.js";
 
 extend({
   fr: {
+    err_copy_failed: "La copie du serveur a échoué.", err_copy_access_denied: "EAM n'a pas le droit de lire ce fichier du serveur à copier (droits Windows). Donnez la lecture au compte qui fait tourner EAM, ou lancez EAM en administrateur.",
     proxy_title: "Derrière un serveur web (Apache, nginx, IIS)", proxy_port: "Port pour le serveur web (0 = coupé)", proxy_hint: "Si un serveur web de cette machine gère déjà HTTPS pour un domaine, mettez par exemple 8792 et faites-le renvoyer vers http://127.0.0.1:8792 (WebSocket compris). Ce port n'écoute que sur la machine. Redémarrage nécessaire.",
     err_import_source_running: "L'ancien serveur tourne encore. Arrêtez-le (saveandexit) et fermez EAH avant de le copier, sinon la copie de la sauvegarde serait abîmée.",
     chat_search: "Rechercher dans le chat…", chat_all_channels: "Tous les canaux", chat_autoscroll: "Défilement auto", chat_mode_private: "Message privé", chat_no_match: "Aucun message trouvé.",
@@ -62,6 +63,7 @@ extend({
     err_scenario_delete_failed: "Le scénario n'a pas pu être supprimé.", err_server_running: "Arrêtez le serveur d'abord.", err_unknown_ore: "Minerai inconnu.",
   },
   en: {
+    err_copy_failed: "Copying the server failed.", err_copy_access_denied: "EAM is not allowed to read this file of the server to copy (Windows permissions). Give read access to the account running EAM, or run EAM as administrator.",
     proxy_title: "Behind a web server (Apache, nginx, IIS)", proxy_port: "Port for the web server (0 = off)", proxy_hint: "If a web server on this machine already handles HTTPS for a domain, set e.g. 8792 and make it forward to http://127.0.0.1:8792 (WebSocket included). This port only listens on this machine. Restart needed.",
     err_import_source_running: "The old server is still running. Stop it (saveandexit) and close EAH before copying it, otherwise the copy of the save would be damaged.",
     chat_search: "Search the chat…", chat_all_channels: "All channels", chat_autoscroll: "Auto scroll", chat_mode_private: "Private message", chat_no_match: "No message found.",

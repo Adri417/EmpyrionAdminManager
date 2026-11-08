@@ -87,7 +87,7 @@ export async function renderUpdateSettings(container) {
       <dl class="kv"><dt>${t("up_current")}</dt><dd>${s.current}</dd>
         <dt>${t("up_latest")}</dt><dd>${s.latest ?? "—"}</dd>
         <dt>${t("up_checked")}</dt><dd>${s.checkedUtc ? new Date(s.checkedUtc).toLocaleString() : "—"}</dd></dl>
-      ${s.error ? html`<div class="error">${errorText(s.error) === errorText("x") ? s.error : errorText(s.error)}</div>` : ""}
+      ${s.error ? html`<div class="error">${errorText(s.error)}</div>` : ""}
       ${s.available ? html`<div class="update-banner"><b>${t("up_available")}</b>${t("up_version", s.latest)}
           ${s.canApply ? html`<button class="btn primary small" id="ups-go">${t("up_apply")}</button>` : html`<div class="hint">${t("up_windows")}</div>`}</div>`
         : s.latest ? html`<div class="hint">${t("up_uptodate")}</div>` : ""}

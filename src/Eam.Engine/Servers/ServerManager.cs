@@ -261,8 +261,8 @@ public sealed class ServerManager : BackgroundService
                 catch (Exception e)
                 {
                     rt.State = ServerState.NotInstalled;
-                    rt.LastError = "copy_failed: " + e.Message;
-                    ServerLog(def, "Copy failed: " + e.Message);
+                    rt.LastError = e is ServerException se ? $"{se.Code}: {se.Detail}" : "copy_failed: " + e.Message;
+                    ServerLog(def, "Copy failed: " + rt.LastError);
                 }
                 finally
                 {
@@ -287,7 +287,9 @@ public sealed class ServerManager : BackgroundService
             var rel = Path.GetRelativePath(from, f.FullName);
             var target = Path.Combine(to, rel);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            f.CopyTo(target, overwrite: true);
+            try { f.CopyTo(target, overwrite: true); }
+            catch (UnauthorizedAccessException) { throw new ServerException("copy_access_denied", rel); }
+            catch (IOException e) { throw new ServerException("copy_failed", $"{rel}: {e.Message}"); }
             done += f.Length;
             rt.Progress = Math.Round(done * 100.0 / total, 1);
             if (DateTime.UtcNow - lastPush > TimeSpan.FromSeconds(1)) { lastPush = DateTime.UtcNow; _ = BroadcastListAsync(); }

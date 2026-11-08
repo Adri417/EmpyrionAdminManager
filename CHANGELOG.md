@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.11 (2026-11-08) - Messages d'erreur clairs
+- Plus jamais « Une erreur est survenue » tout seul : EAM affiche la vraie cause (par exemple le fichier qui n'a pas pu être copié et pourquoi).
+- Import « copier » : message clair quand Windows interdit à EAM de lire un fichier du serveur à copier.
+
 ## 0.9.10 (2026-11-08) - Accès derrière Apache, nginx ou IIS
 - Nouveau réglage « Port pour le serveur web » : si un serveur web de la machine gère déjà HTTPS pour un domaine, il peut renvoyer vers EAM sans qu'EAM croie que les visiteurs sont sur la machine. Adresse réelle des visiteurs reprise pour la protection contre les essais de mot de passe.
 
