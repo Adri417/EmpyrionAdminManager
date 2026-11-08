@@ -11,6 +11,11 @@ extend({
     pl_first: "Première connexion", pl_playtime: "Temps de jeu", pl_none: "Aucun joueur vu sur ce serveur pour l'instant.",
     pl_banned: "Joueurs bannis", pl_back: "← Tous les joueurs", pl_role: "Rôle", role_player: "Joueur", role_gamemaster: "Maître du jeu",
     role_moderator: "Modérateur", role_admin: "Administrateur", pl_credits: "Crédits", pl_exp: "Expérience", pl_upgrade: "Points d'amélioration",
+    inv_live: "en direct", inv_ammo: "munitions", inv_decay: "usure", inv_edit: "Modifier l'inventaire",
+    inv_online_hint: "L'inventaire ne peut être modifié que lorsque le joueur est déconnecté (il est en jeu sur {0}).",
+    inv_offline_hint: "Joueur déconnecté : dernière copie connue de son inventaire. Vos modifications seront mises en place à sa prochaine connexion (son inventaire actuel est sauvegardé avant).",
+    inv_pending: "Une modification attend sa prochaine connexion.", inv_copy_of: "Copie du {0}", inv_add_search: "Chercher un item…", inv_add: "Ajouter",
+    inv_save_next_login: "Enregistrer (appliqué à sa prochaine connexion)", inv_full: "Plus de place libre.",
     pl_level: "Niveau", pl_health: "Santé", pl_pos: "Position", pl_factory: "Usine à plans", pl_inventory: "Inventaire", pl_toolbelt: "Barre d'outils",
     pl_bag: "Sac", pl_history: "Historique", pl_chat: "Messages du joueur", pl_pending: "{0} message(s) en attente de sa prochaine connexion",
     pl_offline_hint: "Le joueur n'est pas connecté : seules les actions hors ligne sont possibles (message, ban, rôle).",
@@ -68,7 +73,7 @@ extend({
     err_invalid_scenario_name: "Nom de dossier invalide.", err_scenario_not_found: "Aucun scénario trouvé dans ce dossier.", err_folder_not_found: "Dossier introuvable.",
     err_scenario_in_use: "Ce scénario est utilisé par le serveur.", err_workshop_download_failed: "Téléchargement Workshop impossible.", err_scenario_install_failed: "Installation du scénario impossible.",
     err_invalid_yaml: "Fichier invalide.", err_invalid_key: "Nom d'option invalide.", err_invalid_value: "Valeur invalide.", err_invalid_section: "Section invalide.",
-    err_player_not_found: "Joueur inconnu.", err_player_offline: "Le joueur doit être connecté pour cette action.", err_game_timeout: "Le jeu n'a pas répondu à temps.",
+    err_inventory_player_online: "L'inventaire ne peut être modifié que lorsque le joueur est déconnecté. Il est en jeu sur :", err_player_not_found: "Joueur inconnu.", err_player_offline: "Le joueur doit être connecté pour cette action.", err_game_timeout: "Le jeu n'a pas répondu à temps.",
     err_game_error: "Le jeu a refusé l'action.", err_invalid_amount: "Montant invalide.", err_invalid_item: "Objet ou quantité invalide.", err_invalid_duration: "Durée invalide (ex. 7d).",
     err_invalid_steam_id: "SteamID invalide.", err_invalid_permission: "Rôle invalide.", err_unknown_action: "Action inconnue.", err_forbidden: "Votre rôle ne permet pas cette action.",
     err_step_failed: "Une étape a échoué.", err_io_error: "Erreur de fichier.",
@@ -78,6 +83,11 @@ extend({
     pl_search: "Search a player…", pl_online: "Online", pl_offline: "Offline", pl_seen: "Last seen", pl_first: "First seen", pl_playtime: "Play time",
     pl_none: "No player seen on this server yet.", pl_banned: "Banned players", pl_back: "← All players", pl_role: "Role", role_player: "Player",
     role_gamemaster: "Game master", role_moderator: "Moderator", role_admin: "Admin", pl_credits: "Credits", pl_exp: "Experience", pl_upgrade: "Upgrade points",
+    inv_live: "live", inv_ammo: "ammo", inv_decay: "wear", inv_edit: "Edit the inventory",
+    inv_online_hint: "The inventory can only be changed while the player is offline (in game on {0}).",
+    inv_offline_hint: "Player offline: last known copy of their inventory. Your changes are put in place at their next login (their current inventory is saved first).",
+    inv_pending: "A change is waiting for their next login.", inv_copy_of: "Copy of {0}", inv_add_search: "Search an item…", inv_add: "Add",
+    inv_save_next_login: "Save (applied at their next login)", inv_full: "No free slot left.",
     pl_level: "Level", pl_health: "Health", pl_pos: "Position", pl_factory: "Blueprint factory", pl_inventory: "Inventory", pl_toolbelt: "Toolbelt",
     pl_bag: "Bag", pl_history: "History", pl_chat: "Player's messages", pl_pending: "{0} message(s) waiting for the next login",
     pl_offline_hint: "The player is not connected: only offline actions are possible (message, ban, role).",
@@ -130,7 +140,7 @@ extend({
     err_invalid_scenario_name: "Invalid folder name.", err_scenario_not_found: "No scenario found in this folder.", err_folder_not_found: "Folder not found.",
     err_scenario_in_use: "This scenario is used by the server.", err_workshop_download_failed: "Workshop download failed.", err_scenario_install_failed: "Scenario installation failed.",
     err_invalid_yaml: "Invalid file.", err_invalid_key: "Invalid option name.", err_invalid_value: "Invalid value.", err_invalid_section: "Invalid section.",
-    err_player_not_found: "Unknown player.", err_player_offline: "The player must be online for this action.", err_game_timeout: "The game did not answer in time.",
+    err_inventory_player_online: "The inventory can only be changed while the player is offline. In game on:", err_player_not_found: "Unknown player.", err_player_offline: "The player must be online for this action.", err_game_timeout: "The game did not answer in time.",
     err_game_error: "The game refused the action.", err_invalid_amount: "Invalid amount.", err_invalid_item: "Invalid item or count.", err_invalid_duration: "Invalid duration (e.g. 7d).",
     err_invalid_steam_id: "Invalid SteamID.", err_invalid_permission: "Invalid role.", err_unknown_action: "Unknown action.", err_forbidden: "Your role does not allow this action.",
     err_step_failed: "A step failed.", err_io_error: "File error.",
@@ -283,7 +293,7 @@ async function renderPlayer(el, s, me, steamId, back) {
   const info = p.info;
   const gm = atLeast(me.role, "gamemaster");
   const admin = atLeast(me.role, "admin");
-  const catalog = info ? await items(s.id) : [];
+  const catalog = await items(s.id);
   const inv = info ? { toolbelt: [...(info.toolbelt || [])], bag: [...(info.bag || [])] } : null;
   let invDirty = false;
 
@@ -293,6 +303,7 @@ async function renderPlayer(el, s, me, steamId, back) {
     renderPlayer(el, s, me, steamId, back);
   };
 
+  const liveGrids = () => html`<h4>${t("pl_toolbelt")}</h4>${invGrid(s.id, inv.toolbelt, catalog, 9, 9)}<h4>${t("pl_bag")}</h4>${invGrid(s.id, inv.bag, catalog, 49, 7)}`;
   const stackRows = (key) => html`${inv[key].map((st, i) => html`<tr><td>${itemLabel(catalog, st.id)} <span class="hint">#${st.id}</span></td>
       <td>${admin ? html`<input type="number" min="1" max="100000" class="small" data-inv="${key}" data-i="${i}" value="${st.count}">` : st.count}</td>
       <td>${admin ? html`<button class="btn small" data-rm="${key}" data-i="${i}">${t("a_remove")}</button>` : ""}</td></tr>`)}`;
@@ -339,10 +350,12 @@ async function renderPlayer(el, s, me, steamId, back) {
       <td>${x.playfield || ""}</td><td>${t("ih_items", x.items)}</td>
       <td class="actions-row"><button class="btn small" data-ih-view="${x.id}">${t("ih_view")}</button></td></tr>`)}</tbody></table></div>`
       : html`<div class="hint">${t("ih_none")}</div>`}</div>` : ""}
-  ${inv ? html`<div class="card"><h3>${t("pl_inventory")}</h3>
-    <h4>${t("pl_toolbelt")}</h4><div class="table-wrap"><table><tbody id="inv-toolbelt">${stackRows("toolbelt")}</tbody></table></div>
-    <h4>${t("pl_bag")}</h4><div class="table-wrap"><table><tbody id="inv-bag">${stackRows("bag")}</tbody></table></div>
-    ${admin ? html`<button class="btn primary" id="inv-save" disabled>${t("a_save_inv")}</button>` : ""}</div>` : ""}
+  ${inv ? html`<div class="card"><h3>${t("pl_inventory")} <span class="state ok">${t("inv_live")}</span></h3>
+    <div id="inv-live">${liveGrids()}</div>
+    ${admin ? html`<div class="hint">${t("inv_online_hint", info.pf || "")}</div>` : ""}</div>`
+    : p.inventories?.length ? html`<div class="card"><h3>${t("pl_inventory")}</h3>
+      ${p.pendingInventory ? html`<div class="state warn">${t("inv_pending")}</div>` : ""}
+      <div class="hint">${t("inv_offline_hint")}</div><div id="inv-last"></div><div id="inv-editor"></div></div>` : ""}
   <div class="card"><h3>${t("pl_history")}</h3><div class="history">${p.events.map((e) => html`<div class="chat-line">
     <span class="chat-time">${when(e.utc)}</span><b>${t("ev_" + e.kind) === "ev_" + e.kind ? (e.kind.startsWith("admin_") ? `${e.by || ""} → ${e.kind.slice(6)}` : e.kind) : t("ev_" + e.kind)}</b>
     <span class="chat-text">${e.detail || ""}</span></div>`)}</div></div>
@@ -350,9 +363,35 @@ async function renderPlayer(el, s, me, steamId, back) {
     <span class="chat-time">${when(m.utc)}</span><span class="badge">${m.channel}</span> <span class="chat-text">${m.text}</span></div>`)}</div></div>`);
 
   $("#pl-back", el).addEventListener("click", back);
+  // Live inventory: asked again every 5 s while this sheet is open (never while the admin is editing it).
+  if (inv) {
+    const timer = setInterval(async () => {
+      const box = $("#inv-live", el);
+      if (!box || !box.isConnected) { clearInterval(timer); return; }
+      if (invDirty) return;
+      try {
+        const q = await api.get(`/api/servers/${s.id}/players/${steamId}`);
+        if (!q.info || invDirty || !box.isConnected) return;
+        inv.toolbelt = [...(q.info.toolbelt || [])]; inv.bag = [...(q.info.bag || [])];
+        mount(box, liveGrids());
+      } catch { /* next try */ }
+    }, 5000);
+  } else if (p.inventories?.length && $("#inv-last", el)) {
+    try {
+      const snaps = await api.get(`/api/servers/${s.id}/inventories?steamId=${steamId}`);
+      const last = snaps[0];
+      if (last) {
+        const ed = { toolbelt: [...(last.toolbelt || [])], bag: [...(last.bag || [])] };
+        const draw = () => mount($("#inv-last", el), html`<div class="hint">${t("inv_copy_of", when(last.utc))}${last.playfield ? " · " + last.playfield : ""}</div>
+          <h4>${t("pl_toolbelt")}</h4>${invGrid(s.id, ed.toolbelt, catalog, 9, 9)}<h4>${t("pl_bag")}</h4>${invGrid(s.id, ed.bag, catalog, 49, 7)}`);
+        draw();
+        if (admin) offlineEditor($("#inv-editor", el), catalog, ed, draw, (body) => act("inventory_set", body));
+      }
+    } catch { /* no history */ }
+  }
   $("#pm-save", el)?.addEventListener("click", () => act("meta", { note: $("#pm-note", el).value, marked: $("#pm-marked", el).checked, banExempt: $("#pm-exempt", el).checked }).catch(fail));
   $("#ih-now", el)?.addEventListener("click", () => act("inventory_snapshot").catch(fail));
-  $$("[data-ih-view]", el).forEach((b) => b.addEventListener("click", () => snapshotDialog(s, +b.dataset.ihView, steamId, p.online, admin, catalog.length ? catalog : null, () => renderPlayer(el, s, me, steamId, back))));
+  $$("[data-ih-view]", el).forEach((b) => b.addEventListener("click", () => snapshotDialog(s, +b.dataset.ihView, steamId, p.online, admin, catalog, () => renderPlayer(el, s, me, steamId, back))));
   $("#ih-tpl-save", el)?.addEventListener("click", () => dialog(t("ih_tpl_save"), html`<label>${t("col_name")}</label><input name="n" maxlength="40" required autofocus>`,
     (f) => act("inventory_template_save", { name: f.n.value })));
   $("#ih-tpl-load", el)?.addEventListener("click", async () => {
@@ -461,10 +500,70 @@ async function renderPlayer(el, s, me, steamId, back) {
   $$("[data-a]", el).forEach((b) => b.addEventListener("click", () => handlers[b.dataset.a]()));
 }
 
-// =================================================================== inventory history (0.9.5)
-function stacksTable(list, catalog) {
-  return html`<div class="inv-grid">${(list || []).map((x) => html`<div>${catalog ? itemLabel(catalog, x.id) : "#" + x.id} <b>× ${x.count}</b></div>`)}</div>`;
+// Offline inventory editor: quantities, removal, new items; saved changes are put in place at the next login.
+function offlineEditor(box, catalog, ed, redraw, save) {
+  const rows = (key) => html`${ed[key].map((st, i) => html`<tr><td>${itemLabel(catalog, st.id)} <span class="hint">#${st.id}</span></td>
+    <td><input type="number" min="1" max="100000" class="small" data-oe="${key}" data-i="${i}" value="${st.count}"></td>
+    <td><button type="button" class="btn small" data-oe-del="${key}" data-i="${i}">${t("a_remove")}</button></td></tr>`)}`;
+  const draw = () => {
+    mount(box, html`<details ${raw(box.dataset.open ? "open" : "")}><summary>${t("inv_edit")}</summary>
+      <h4>${t("pl_toolbelt")}</h4><div class="table-wrap"><table><tbody>${rows("toolbelt")}</tbody></table></div>
+      <h4>${t("pl_bag")}</h4><div class="table-wrap"><table><tbody>${rows("bag")}</tbody></table></div>
+      <div class="actions-row wrap"><input type="search" id="oe-q" placeholder="${t("inv_add_search")}">
+        <select id="oe-item"></select><input type="number" id="oe-n" min="1" max="100000" value="1" class="small">
+        <select id="oe-where"><option value="bag">${t("pl_bag")}</option><option value="toolbelt">${t("pl_toolbelt")}</option></select>
+        <button type="button" class="btn" id="oe-add">${t("inv_add")}</button></div>
+      <button type="button" class="btn primary" id="oe-save">${t("inv_save_next_login")}</button></details>`);
+    $("details", box).addEventListener("toggle", (e) => { box.dataset.open = e.target.open ? "1" : ""; });
+    const fill = (q) => {
+      const found = catalog.filter((i) => !q || i.label.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || String(i.id) === q).slice(0, 200);
+      mount($("#oe-item", box), html`${found.map((i) => html`<option value="${i.id}">${i.label} (#${i.id})</option>`)}`);
+    };
+    fill("");
+    $("#oe-q", box).addEventListener("input", (e) => fill(e.target.value.trim().toLowerCase()));
+    $$("[data-oe]", box).forEach((i) => i.addEventListener("change", () => { ed[i.dataset.oe][+i.dataset.i].count = Math.max(1, +i.value || 1); redraw(); }));
+    $$("[data-oe-del]", box).forEach((b) => b.addEventListener("click", () => { ed[b.dataset.oeDel].splice(+b.dataset.i, 1); redraw(); draw(); }));
+    $("#oe-add", box).addEventListener("click", () => {
+      const idv = +$("#oe-item", box).value;
+      if (!idv) return;
+      const where = $("#oe-where", box).value;
+      const max = where === "toolbelt" ? 9 : 49;
+      const used = new Set(ed[where].map((x) => x.slot));
+      let slot = 0;
+      while (used.has(slot) && slot < max) slot++;
+      if (slot >= max) { toast(t("inv_full"), true); return; }
+      ed[where].push({ id: idv, count: Math.max(1, +$("#oe-n", box).value || 1), slot, ammo: 0, decay: 0 });
+      redraw(); draw();
+    });
+    $("#oe-save", box).addEventListener("click", () => save({ toolbelt: ed.toolbelt, bag: ed.bag }).catch(fail));
+  };
+  draw();
 }
+
+// =================================================================== inventory history (0.9.5)
+// Item without a picture: show its name instead (inline handlers are blocked by the page's security policy).
+document.addEventListener("error", (e) => { if (e.target instanceof HTMLImageElement && e.target.closest(".inv-slot")) e.target.remove(); }, true);
+// Visual inventory like in game: one cell per slot, the item's picture of THIS server, quantity in the corner.
+// Toolbelt = 9 slots, bag = 7 × 7. Items without a slot number fill the free cells.
+function invGrid(sid, list, catalog, slots, cols, editKey = null) {
+  const cells = Array.from({ length: slots }, () => null);
+  const extra = [];
+  (list || []).forEach((x, i) => {
+    const at = Number.isInteger(x.slot) && x.slot >= 0 && x.slot < slots && !cells[x.slot] ? x.slot : -1;
+    if (at >= 0) cells[at] = [x, i]; else extra.push([x, i]);
+  });
+  extra.forEach((e) => { const free = cells.indexOf(null); if (free >= 0) cells[free] = e; });
+  return html`<div class="inv-slots c${cols}">${cells.map((c, slot) => {
+    if (!c) return html`<div class="inv-slot empty" ${raw(editKey ? `data-slot-add="${editKey}" data-slot="${slot}"` : "")}></div>`;
+    const [x, i] = c;
+    const label = catalog?.length ? itemLabel(catalog, x.id) : "#" + x.id;
+    const tip = `${label} · #${x.id} · ×${x.count}${x.ammo ? ` · ${t("inv_ammo")} ${x.ammo}` : ""}${x.decay ? ` · ${t("inv_decay")} ${x.decay}` : ""}`;
+    return html`<div class="inv-slot" title="${tip}" ${raw(editKey ? `data-slot-edit="${editKey}" data-i="${i}"` : "")}>
+      <img src="/api/servers/${sid}/item-icon/${x.id}" alt="" loading="lazy">
+      <span class="inv-name">${label}</span><b class="inv-count">${x.count > 1 ? x.count.toLocaleString() : ""}</b></div>`;
+  })}</div>`;
+}
+const stacksTable = (sid, list, catalog, slots, cols) => invGrid(sid, list, catalog, slots, cols);
 
 async function snapshotDialog(s, snapId, steamId, online, admin, catalog, done) {
   let list = [];
@@ -477,7 +576,7 @@ async function snapshotDialog(s, snapId, steamId, online, admin, catalog, done) 
     done?.();
   };
   const dlg = dialog(`${x.name} · ${when(x.utc)}`, html`<div class="hint">${t("ih_r_" + x.reason)}${x.playfield ? " · " + x.playfield : ""}</div>
-    <h4>${t("pl_toolbelt")}</h4>${stacksTable(x.toolbelt, catalog)}<h4>${t("pl_bag")}</h4>${stacksTable(x.bag, catalog)}
+    <h4>${t("pl_toolbelt")}</h4>${stacksTable(s.id, x.toolbelt, catalog, 9, 9)}<h4>${t("pl_bag")}</h4>${stacksTable(s.id, x.bag, catalog, 49, 7)}
     ${admin ? html`<div class="actions-row wrap">
       ${online ? html`<button type="button" class="btn primary" data-r="replace">${t("ih_restore")}</button>
         <button type="button" class="btn" data-r="add">${t("ih_give")}</button>` : html`<div class="hint">${t("ih_offline")}</div>`}

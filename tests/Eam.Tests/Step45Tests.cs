@@ -212,7 +212,7 @@ public class CatalogTests
         try
         {
             var fr = ItemCatalog.Load(def, "My Scenario", "fr");
-            Assert.Equal("Lingot de fer", fr.Single(i => i.Id == 4320).Label);
+            Assert.Equal("Lingot de fer", fr.Single(i => i.Id == 224 + 8192).Label);
             Assert.Equal("Béton, blocs", fr.Single(i => i.Id == 399).Label);
             Assert.True(fr.Single(i => i.Id == 399).IsBlock);
             Assert.Equal("Concrete", ItemCatalog.Load(def, "My Scenario", "en").Single(i => i.Id == 399).Label);

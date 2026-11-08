@@ -259,3 +259,15 @@ tr.row-online { outline: 1px solid color-mix(in srgb, var(--ok) 55%, transparent
 .chat-tools select, .chat-tools .check { width: auto; flex: 0 0 auto; margin: 0; }
 .chat-tools input[type=search] { width: auto; margin: 0; }
 [hidden] { display: none !important; }
+
+/* Inventory grid (like in game) */
+.inv-slots { display: grid; gap: 4px; max-width: 640px; }
+.inv-slots.c9 { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+.inv-slots.c7 { grid-template-columns: repeat(7, minmax(0, 1fr)); max-width: 500px; }
+.inv-slot { position: relative; aspect-ratio: 1; border: 1px solid var(--border, #444); border-radius: 6px; background: rgba(127,127,127,.12);
+  display: flex; align-items: center; justify-content: center; overflow: hidden; min-width: 0; }
+.inv-slot.empty { background: rgba(127,127,127,.05); }
+.inv-slot img { width: 80%; height: 80%; object-fit: contain; position: absolute; inset: 10%; }
+.inv-slot .inv-name { font-size: 10px; line-height: 1.1; text-align: center; padding: 2px; word-break: break-word; opacity: .85; }
+.inv-slot img + .inv-name { display: none; }
+.inv-slot .inv-count { position: absolute; right: 3px; bottom: 1px; font-size: 12px; text-shadow: 0 0 3px #000, 0 0 3px #000; color: #fff; }

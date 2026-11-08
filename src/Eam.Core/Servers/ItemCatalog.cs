@@ -12,55 +12,114 @@ public sealed record CatalogItem(int Id, string Name, string Label, bool IsBlock
 /// </summary>
 public static partial class ItemCatalog
 {
-    [GeneratedRegex(@"^\{\s*\+?(Item|Block)\s+Id:\s*(\d+)\s*,\s*Name:\s*([^\s,]+)", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^\{\s*\+?(Item|Block)\s+(?:Id:\s*(\d+)\s*,\s*)?Name:\s*(?:""([^""]+)""|([^\s,}]+))", RegexOptions.Multiline)]
     private static partial Regex Entry();
 
     [GeneratedRegex(@"\[[^\]]{0,12}\]")]
     private static partial Regex Markup();
 
-    public const int ItemIdOffset = 4096;
+    /// <summary>
+    /// In inventories, items are numbered after the block ids: inventory id = ItemsConfig Id + 8192
+    /// (O2 bottle 80 -> 8272). Blocks keep their own id.
+    /// </summary>
+    public const int ItemIdOffset = 8192;
 
     private static readonly ConcurrentDictionary<string, (DateTime Stamp, IReadOnlyList<CatalogItem> Items)> Cache = new();
 
+    /// <summary>
+    /// The game's own configuration first, then the scenario's, which overrides it (same name or id).
+    /// Blocks written without an id get the one the save gave them (Saves\Games\&lt;game&gt;\blocksmap.dat).
+    /// </summary>
     public static IReadOnlyList<CatalogItem> Load(ServerDefinition def, string? scenario, string language)
     {
-        var configDirs = new List<string>();
-        var locFiles = new List<string>();
+        var baseConfig = Path.Combine(def.GameDir, "Content", "Configuration");
+        var configDirs = new List<string> { baseConfig };
+        var locFiles = new List<string> { Path.Combine(def.GameDir, "Content", "Extras", "Localization.csv") };
         if (!string.IsNullOrWhiteSpace(scenario))
         {
-            var s = Path.Combine(ScenarioLibrary.ScenariosDir(def), scenario);
-            configDirs.Add(Path.Combine(s, "Content", "Configuration"));
-            locFiles.Add(Path.Combine(s, "Extras", "Localization.csv"));
+            var sc = Path.Combine(ScenarioLibrary.ScenariosDir(def), scenario);
+            configDirs.Add(Path.Combine(sc, "Content", "Configuration"));
+            locFiles.Add(Path.Combine(sc, "Extras", "Localization.csv"));
+            locFiles.Add(Path.Combine(sc, "Content", "Extras", "Localization.csv"));
         }
-        configDirs.Add(Path.Combine(def.GameDir, "Content", "Configuration"));
-        locFiles.Add(Path.Combine(def.GameDir, "Content", "Extras", "Localization.csv"));
-
-        var config = configDirs.FirstOrDefault(d => File.Exists(Path.Combine(d, "ItemsConfig.ecf")));
-        if (config is null) return [];
-        var loc = locFiles.FirstOrDefault(File.Exists);
-        var files = new[] { Path.Combine(config, "ItemsConfig.ecf"), Path.Combine(config, "BlocksConfig.ecf"), loc }.OfType<string>().Where(File.Exists).ToList();
-        var stamp = files.Select(File.GetLastWriteTimeUtc).DefaultIfEmpty().Max();
-        var key = string.Join("|", files) + "|" + language;
+        var files = new List<string>();
+        foreach (var d in configDirs)
+            foreach (var n in new[] { "BlocksConfig.ecf", "ItemsConfig.ecf" })
+                if (File.Exists(Path.Combine(d, n))) files.Add(Path.Combine(d, n));
+        if (files.Count == 0) return [];
+        var locs = locFiles.Where(File.Exists).ToList();
+        var blocksMap = BlocksMapFile(def);
+        var stampFiles = files.Concat(locs).Concat(blocksMap is null ? [] : [blocksMap]).ToList();
+        var stamp = stampFiles.Select(File.GetLastWriteTimeUtc).DefaultIfEmpty().Max();
+        var key = string.Join("|", stampFiles) + "|" + language;
         if (Cache.TryGetValue(key, out var c) && c.Stamp == stamp) return c.Items;
 
-        var names = loc is null ? new Dictionary<string, string>() : ReadLocalization(loc, language);
-        var items = new Dictionary<int, CatalogItem>();
-        foreach (var f in files.Where(f => f.EndsWith(".ecf", StringComparison.OrdinalIgnoreCase)))
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var loc in locs)
+            foreach (var kv in ReadLocalization(loc, language)) names[kv.Key] = kv.Value; // scenario last: wins
+        var mapped = blocksMap is null ? new Dictionary<string, int>() : ReadBlocksMap(blocksMap);
+        var byName = new Dictionary<string, CatalogItem>(StringComparer.Ordinal);
+        foreach (var f in files)
         {
             foreach (Match m in Entry().Matches(File.ReadAllText(f)))
             {
                 var isBlock = m.Groups[1].Value == "Block";
-                // In inventories, items are numbered after the 4096 block ids (IronIngot 224 -> 4320).
-                var id = int.Parse(m.Groups[2].Value) + (isBlock ? 0 : ItemIdOffset);
-                var name = m.Groups[3].Value;
+                var name = m.Groups[3].Success ? m.Groups[3].Value : m.Groups[4].Value;
+                int id;
+                if (m.Groups[2].Success) id = int.Parse(m.Groups[2].Value) + (isBlock ? 0 : ItemIdOffset);
+                else if (isBlock && mapped.TryGetValue(name, out var mid)) id = mid;
+                else if (byName.TryGetValue(name, out var known)) id = known.Id;
+                else continue;
                 if (id == 0) continue;
                 var label = names.TryGetValue(name, out var l) ? l : name;
-                items[id] = new CatalogItem(id, name, label, isBlock);
+                byName[name] = new CatalogItem(id, name, label, isBlock);
             }
         }
+        var items = new Dictionary<int, CatalogItem>();
+        foreach (var it in byName.Values) items[it.Id] = it;
         var list = items.Values.OrderBy(i => i.Label, StringComparer.OrdinalIgnoreCase).ToList();
         Cache[key] = (stamp, list);
         return list;
+    }
+
+    /// <summary>blocksmap.dat of the save the server plays (null when unknown).</summary>
+    public static string? BlocksMapFile(ServerDefinition def)
+    {
+        try
+        {
+            if (!File.Exists(def.YamlFile)) return null;
+            var y = DedicatedYaml.Load(def.YamlFile);
+            var game = y.Get("GameConfig", "GameName");
+            if (string.IsNullOrWhiteSpace(game)) return null;
+            var saves = y.Get("GameConfig", "SaveDirectory") ?? y.Get("ServerConfig", "SaveDirectory");
+            if (string.IsNullOrWhiteSpace(saves)) saves = Path.Combine(def.GameDir, "Saves");
+            else if (!Path.IsPathFullyQualified(saves)) saves = Path.Combine(def.GameDir, saves);
+            var f = Path.Combine(saves, "Games", game, "blocksmap.dat");
+            return File.Exists(f) ? f : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>blocksmap.dat: 9-byte header, then [name length][ASCII name][uint16 id] repeated.</summary>
+    public static Dictionary<string, int> ReadBlocksMap(string file)
+    {
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        try
+        {
+            var b = File.ReadAllBytes(file);
+            var i = 9;
+            while (i < b.Length)
+            {
+                int len = b[i++];
+                if (len == 0 || i + len + 2 > b.Length) break;
+                var name = Encoding.ASCII.GetString(b, i, len);
+                i += len;
+                map[name] = b[i] | (b[i + 1] << 8);
+                i += 2;
+            }
+        }
+        catch { }
+        return map;
     }
 
     private static Dictionary<string, string> ReadLocalization(string file, string language)

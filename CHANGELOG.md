@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.21 (2026-11-08) - Inventaire visuel
+- Inventaire des joueurs affiché comme en jeu : barre d'outils (9 cases) et sac (7 × 7), avec l'image de chaque item, la quantité dans le coin et le nom au survol. Mêmes grilles pour les copies de sacs à dos.
+- Les images et les noms viennent du serveur lui-même (scénario de RE1, de RE2…) : images du scénario (SharedData\Content\Bundles\ItemIcons), puis du jeu, puis d'EAH si copié avec le serveur, ou eam\icons pour ajouter les siennes.
+- Inventaire en direct quand le joueur est connecté (rafraîchi toutes les 5 s). Joueur déconnecté : dernière copie connue.
+- Modification seulement quand le joueur est déconnecté : quantités, retrait, ajout d'items ; mise en place à sa prochaine connexion, après une copie de son inventaire actuel.
+- Corrigé : numéros des items dans les inventaires = Id + 8192 (et non 4096) ; noms du scénario qui priment sur ceux du jeu ; blocs sans numéro lus dans blocksmap.dat de la sauvegarde.
+
 ## 0.9.20 (2026-11-08) - Alerte rouge et mise à jour automatique du jeu
 - Compte à rebours de redémarrage/arrêt : alerte rouge avec alarme (en plus du chat) à 5, 3, 2 et 1 minute ; à 1 minute les joueurs sont déconnectés, puis le serveur sauvegarde et redémarre. Plus de message à 4 minutes.
 - Nouveau mode de message « Alerte rouge (avec alarme) » dans le chat et le planificateur.

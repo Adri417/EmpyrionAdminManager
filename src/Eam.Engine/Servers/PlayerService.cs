@@ -32,6 +32,7 @@ public sealed class PlayerService
         _live = live;
         _log = log;
         _live.PlayerJoined += DeliverOfflineMessagesAsync;
+        _live.PlayerJoined += ApplyPendingInventoryAsync;
     }
 
     public object List(long id)
@@ -78,6 +79,7 @@ public sealed class PlayerService
             info = full,
             liveError,
             pendingMessages = data.PendingOfflineMessages(steamId),
+            pendingInventory = data.Counter(steamId, "pending_inventory") is not null,
             events = data.PlayerEvents(steamId, 300),
             chat = data.PlayerChat(steamId, 200),
             meta = data.Meta(steamId),
@@ -86,6 +88,16 @@ public sealed class PlayerService
             saves = PlayerSaves(id, steamId),
             survivalClaimed = data.Counter(steamId, "cb_survival") is not null,
         };
+    }
+
+    /// <summary>Picture of an item for this server (its scenario's own icons first, see <see cref="ItemIcons"/>).</summary>
+    public string? IconFile(long id, int itemId)
+    {
+        var def = _manager.Definition(id);
+        string? scenario = null;
+        try { scenario = File.Exists(def.YamlFile) ? DedicatedYaml.Load(def.YamlFile).Get("GameConfig", "CustomScenario") : null; } catch { }
+        var name = ItemCatalog.Load(def, scenario, "en").FirstOrDefault(i => i.Id == itemId)?.Name;
+        return ItemIcons.Find(def, scenario, itemId, name);
     }
 
     public object Items(long id, string language)
@@ -212,10 +224,13 @@ public sealed class PlayerService
             case "inventory_set":
             {
                 Need("admin");
-                object Stacks(List<StackDto>? s) => (s ?? []).Where(x => x.Id > 0 && x.Count > 0)
-                    .Select(x => new Dictionary<string, object?> { ["id"] = x.Id, ["count"] = x.Count, ["slot"] = x.Slot, ["ammo"] = x.Ammo, ["decay"] = x.Decay }).ToList();
-                await _live.RequestAsync(id, new() { ["op"] = "inventory_set", ["id"] = Entity(), ["toolbelt"] = Stacks(r.Toolbelt), ["bag"] = Stacks(r.Bag) });
-                detail = $"{r.Toolbelt?.Count ?? 0} + {r.Bag?.Count ?? 0} stacks";
+                // Edited only while the player is offline (nobody moves items meanwhile): the new inventory is
+                // kept and put in place at the next login, after a copy of the old one.
+                if (online is not null) throw new ServerException("inventory_player_online", online.Playfield ?? "");
+                var pending = System.Text.Json.JsonSerializer.Serialize(new { toolbelt = r.Toolbelt ?? [], bag = r.Bag ?? [], by });
+                data.SetCounter(steamId, "pending_inventory", 1, pending);
+                detail = $"(next login) {r.Toolbelt?.Count ?? 0} + {r.Bag?.Count ?? 0} stacks";
+                result = new { queued = true };
                 break;
             }
             case "teleport":
@@ -560,6 +575,29 @@ public sealed class PlayerService
         var t = (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
         if (t.Length == 0) throw new ServerException("message_empty");
         return t.Length > max ? t[..max] : t;
+    }
+
+    private sealed record PendingInventory(List<StackDto> Toolbelt, List<StackDto> Bag, string? By);
+
+    /// <summary>Inventory edited while the player was offline: applied once they are in game (old one kept first).</summary>
+    private async Task ApplyPendingInventoryAsync(ServerDefinition def, LivePlayer p)
+    {
+        if (p.SteamId is not { Length: > 0 } steam) return;
+        var data = _live.Data(def);
+        if (data.Counter(steam, "pending_inventory")?.Value is not { Length: > 0 } json) return;
+        try
+        {
+            var inv = System.Text.Json.JsonSerializer.Deserialize<PendingInventory>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            await Task.Delay(TimeSpan.FromSeconds(20)); // let the player finish loading
+            await SaveCurrentAsync(def, p, "before_edit");
+            object Stacks(List<StackDto>? s) => (s ?? []).Where(x => x.Id > 0 && x.Count > 0)
+                .Select(x => new Dictionary<string, object?> { ["id"] = x.Id, ["count"] = x.Count, ["slot"] = x.Slot, ["ammo"] = x.Ammo, ["decay"] = x.Decay }).ToList();
+            await _live.RequestAsync(def.Id, new() { ["op"] = "inventory_set", ["id"] = p.Id, ["toolbelt"] = Stacks(inv.Toolbelt), ["bag"] = Stacks(inv.Bag) });
+            data.DeleteCounter(steam, "pending_inventory");
+            data.PlayerEvent(steam, p.Name, "inventory_applied", $"{inv.Toolbelt.Count} + {inv.Bag.Count} stacks", inv.By);
+            ServerManager.ServerLog(def, $"Inventory edited by {inv.By} applied to {p.Name} at login");
+        }
+        catch (Exception e) { _log.LogWarning("Pending inventory for {Name} not applied: {Err}", p.Name, e.Message); }
     }
 
     private async Task DeliverOfflineMessagesAsync(ServerDefinition def, LivePlayer p)

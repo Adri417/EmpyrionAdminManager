@@ -441,7 +441,7 @@ public static class EahImporter
                 var steam = Steam(r.Long("Owner_ID"));
                 if (!IsSteam(steam)) steam = r.Str("Owner_Name") is { } n && names.TryGetValue(n, out var s) ? s : "";
                 var item = (int)r.Long("Mining_Item");
-                var ore = ores.FirstOrDefault(x => x.ItemId == item || x.ItemId == item + 4096 || x.ItemId + 4096 == item)?.Key;
+                var ore = ores.FirstOrDefault(x => x.ItemId == item || x.ItemId == item + ItemCatalog.ItemIdOffset || x.ItemId + ItemCatalog.ItemIdOffset == item)?.Key;
                 if (!IsSteam(steam) || ore is null) { skipped++; continue; }
                 Run(ins, ("$s", steam), ("$o", ore), ("$l", Math.Max(1, r.Long("Mining_Level"))), ("$a", r.Double("Amount")), ("$f", r.Double("Fuel")),
                     ("$u", ServerData.UtcText(DateTime.UtcNow)));

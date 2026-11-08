@@ -97,9 +97,9 @@ public sealed class MaintenanceService(ServerManager manager, LiveService live, 
         var items = ItemCatalog.Load(def, scenario, lang);
         query = (query ?? "").Trim();
         var byNumber = int.TryParse(query, out var n);
-        return items.Where(i => query.Length == 0 || (byNumber ? i.Id == n || i.Id - 4096 == n : i.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || i.Label.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        return items.Where(i => query.Length == 0 || (byNumber ? i.Id == n || i.Id - ItemCatalog.ItemIdOffset == n : i.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || i.Label.Contains(query, StringComparison.OrdinalIgnoreCase)))
             .Take(200)
-            .Select(i => new { i.Id, configId = i.IsBlock ? i.Id : i.Id - 4096, i.Name, i.Label, i.IsBlock })
+            .Select(i => new { i.Id, configId = i.IsBlock ? i.Id : i.Id - ItemCatalog.ItemIdOffset, i.Name, i.Label, i.IsBlock })
             .ToList();
     }
 }

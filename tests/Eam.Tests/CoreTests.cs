@@ -181,3 +181,40 @@ public class EahModDetectionTests
         finally { Directory.Delete(root, true); }
     }
 }
+
+public class ItemCatalogTests
+{
+    [Fact]
+    public void ScenarioOverridesTheGameAndBlocksWithoutIdComeFromTheSave()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "eam-cat-" + Guid.NewGuid().ToString("N"));
+        var def = new Eam.Core.Servers.ServerDefinition { Id = 1, Name = "t", Slug = "t", RootDir = root, GamePort = 30000, TelnetPort = 30004, TelnetPassword = "x" };
+        try
+        {
+            var game = def.GameDir;
+            Directory.CreateDirectory(Path.Combine(game, "Content", "Configuration"));
+            File.WriteAllText(Path.Combine(game, "Content", "Configuration", "ItemsConfig.ecf"), "{ +Item Id: 80, Name: OxygenBottleLarge\n}\n{ +Item Id: 224, Name: IronIngot\n}\n");
+            File.WriteAllText(Path.Combine(game, "Content", "Configuration", "BlocksConfig.ecf"), "{ +Block Id: 10, Name: Old\n}\n");
+            var sc = Path.Combine(game, "Content", "Scenarios", "S");
+            Directory.CreateDirectory(Path.Combine(sc, "Content", "Configuration"));
+            File.WriteAllText(Path.Combine(sc, "Content", "Configuration", "ItemsConfig.ecf"), "{ +Item Id: 320, Name: AlienTooth\n}\n");
+            File.WriteAllText(Path.Combine(sc, "Content", "Configuration", "BlocksConfig.ecf"), "{ +Block Name: NewBlock\n}\n");
+            Directory.CreateDirectory(Path.Combine(sc, "SharedData", "Content", "Bundles", "ItemIcons"));
+            File.WriteAllText(Path.Combine(sc, "SharedData", "Content", "Bundles", "ItemIcons", "OxygenBottleLarge.png"), "png");
+            File.WriteAllText(def.YamlFile, "ServerConfig:\n  Srv_Port: 30000\nGameConfig:\n  GameName: G\n  CustomScenario: S\n");
+            var save = Path.Combine(game, "Saves", "Games", "G");
+            Directory.CreateDirectory(save);
+            var map = new List<byte>(new byte[9]);
+            map.Add(8); map.AddRange(System.Text.Encoding.ASCII.GetBytes("NewBlock")); map.Add(0x10); map.Add(0x08); // 2064
+            File.WriteAllBytes(Path.Combine(save, "blocksmap.dat"), map.ToArray());
+
+            var items = Eam.Core.Servers.ItemCatalog.Load(def, "S", "en");
+            Assert.Contains(items, i => i.Id == 8272 && i.Name == "OxygenBottleLarge");
+            Assert.Contains(items, i => i.Id == 8512 && i.Name == "AlienTooth");
+            Assert.Contains(items, i => i.Id == 2064 && i.Name == "NewBlock" && i.IsBlock);
+            Assert.EndsWith("OxygenBottleLarge.png", Eam.Core.Servers.ItemIcons.Find(def, "S", 8272, "OxygenBottleLarge"));
+            Assert.Null(Eam.Core.Servers.ItemIcons.Find(def, "S", 8416, "IronIngot"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+}

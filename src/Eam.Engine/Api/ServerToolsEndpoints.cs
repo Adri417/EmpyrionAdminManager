@@ -80,6 +80,14 @@ public static class ServerToolsEndpoints
         g.MapGet("/players", (long id, PlayerService p) => Run(() => p.List(id))).RequireAuthorization(Roles.Moderator);
         g.MapGet("/players/banned", (long id, PlayerService p) => RunAsync(() => p.BannedAsync(id))).RequireAuthorization(Roles.Moderator);
         g.MapGet("/players/items", (long id, string? lang, PlayerService p) => Run(() => p.Items(id, lang ?? "en"))).RequireAuthorization(Roles.GameMaster);
+        // Item pictures of THIS server (its scenario's icons, see ItemIcons): 404 when there is none.
+        g.MapGet("/item-icon/{itemId:int}", (long id, int itemId, PlayerService p, HttpContext c) =>
+        {
+            var f = p.IconFile(id, itemId);
+            if (f is null) return Results.NotFound();
+            c.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(f, "image/png");
+        }).RequireAuthorization(Roles.GameMaster);
         g.MapGet("/players/{steamId}", (long id, string steamId, PlayerService p) => RunAsync(() => p.DetailAsync(id, steamId))).RequireAuthorization(Roles.Moderator);
         g.MapPost("/players/{steamId}/action", (long id, string steamId, PlayerActionRequest req, PlayerService p, Eam.Core.Security.UserStore users, HttpContext c) =>
             RunAsync(async () =>
