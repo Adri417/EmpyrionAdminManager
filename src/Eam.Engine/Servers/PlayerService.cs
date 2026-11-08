@@ -28,6 +28,7 @@ public sealed class PlayerService
     {
         _manager = manager;
         manager.KickAllPlayers = (id, reason) => KickAllAsync(id, reason, "EAM (restart)");
+        manager.RedAlert = live.RedAlertAsync;
         _live = live;
         _log = log;
         _live.PlayerJoined += DeliverOfflineMessagesAsync;

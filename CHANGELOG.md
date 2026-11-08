@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.20 (2026-11-08) - Alerte rouge et mise à jour automatique du jeu
+- Compte à rebours de redémarrage/arrêt : alerte rouge avec alarme (en plus du chat) à 5, 3, 2 et 1 minute ; à 1 minute les joueurs sont déconnectés, puis le serveur sauvegarde et redémarre. Plus de message à 4 minutes.
+- Nouveau mode de message « Alerte rouge (avec alarme) » dans le chat et le planificateur.
+- Mises à jour du jeu (onglet Gameplay) : EAM regarde sur Steam toutes les heures. « Prévenir seulement » (par défaut) ou « Mettre à jour automatiquement » (compte à rebours, sauvegarde, mise à jour SteamCMD, redémarrage). Une version déjà essayée n'est jamais réessayée.
+- Corrigé : la vérification des versions Steam ne donnait rien quand SteamCMD manquait (serveur copié depuis EAH) ; EAM l'installe maintenant tout seul.
+
 ## 0.9.19 (2026-11-08) - Kick à 1 minute du redémarrage
 - Voir 0.9.18 : le compte à rebours envoie un message à 5, 4, 3 et 2 minutes, puis déconnecte tous les joueurs à 1 minute.
 

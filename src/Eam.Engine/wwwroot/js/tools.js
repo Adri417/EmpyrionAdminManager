@@ -683,7 +683,8 @@ function taskDialog(s, x, done) {
     <div data-for="restart update wipe"><label class="check"><input type="checkbox" name="backupFirst" ${raw(p.backupFirst ? "checked" : "")}> ${t("p_backup_first")}</label></div>
     <div data-for="message"><label>${t("p_text")}</label><input name="text" maxlength="300" value="${p.text ?? ""}">
       <label>${t("p_mode")}</label><select name="mode"><option value="chat">${t("chat_mode_chat")}</option>
-      <option value="popup" ${raw(p.mode === "popup" ? "selected" : "")}>${t("chat_mode_popup")}</option></select></div>
+      <option value="popup" ${raw(p.mode === "popup" ? "selected" : "")}>${t("chat_mode_popup")}</option>
+      <option value="alert" ${raw(p.mode === "alert" ? "selected" : "")}>${t("chat_mode_alert")}</option></select></div>
     <div data-for="command"><label>${t("p_command")}</label><input name="command" maxlength="500" value="${p.command ?? ""}"></div>
     <div data-for="wipe"><label>${t("p_playfields")}</label><input name="playfields" value="${(p.playfields || []).join(", ")}">
       <label>${t("p_wipe")}</label><select name="wipe">${["poi", "deposit", "terrain", "all"].map((w) => html`<option value="${w}" ${raw(p.wipe === w ? "selected" : "")}>${t("w_" + w)}</option>`)}</select>

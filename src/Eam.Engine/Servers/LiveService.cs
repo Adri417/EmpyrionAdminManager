@@ -225,6 +225,14 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
 
     // ------------------------------------------------------------------ sending messages
 
+    /// <summary>Red alert with the alarm sound to every player (false when the EAM mod is not connected).</summary>
+    public async Task<bool> RedAlertAsync(long id, string text)
+    {
+        if (!_links.TryGetValue(id, out var link)) return false;
+        try { await link.SendAsync(new { op = "msg_all", text, prio = 0, secs = 8 }); return true; }
+        catch { return false; }
+    }
+
     /// <summary>
     /// mode "chat": message in the global chat; "popup": message box on the players' screen
     /// (all players, or one player when <paramref name="playerId"/> is set).
@@ -258,11 +266,13 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
             return pe;
         }
 
-        if (mode == "popup")
+        if (mode is "popup" or "alert")
         {
+            // "alert" = Empyrion's red box with the alarm sound (priority 0), "popup" = the normal message box.
             if (link is null) throw new ServerException("mod_not_connected");
-            if (playerId is { } pid) await link.SendAsync(new { op = "msg_player", id = pid, text, prio = 1, secs = 10 });
-            else await link.SendAsync(new { op = "msg_all", text, prio = 1, secs = 10 });
+            var prio = mode == "alert" ? 0 : 1;
+            if (playerId is { } pid) await link.SendAsync(new { op = "msg_player", id = pid, text, prio, secs = 10 });
+            else await link.SendAsync(new { op = "msg_all", text, prio, secs = 10 });
             ServerManager.ServerLog(def, $"Message box from {by}{(playerId is null ? "" : $" to player {playerId}")}: {text}");
             return null;
         }

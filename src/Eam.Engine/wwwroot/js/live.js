@@ -12,7 +12,7 @@ extend({
     col_level: "Niveau", col_ping: "Ping", col_online: "Connecté depuis", col_players: "Joueurs", col_mem: "Mémoire",
     col_structs: "Structures", col_pid: "Processus",
     chat_empty: "Aucun message pour l'instant.", chat_older: "Messages plus anciens", translate: "Traduire", chat_mode_chat: "Dans le chat",
-    chat_mode_popup: "Fenêtre à l'écran de tous", chat_placeholder: "Votre message…", chat_readonly: "Lecture seule : votre rôle ne permet pas d'envoyer de messages.",
+    chat_mode_popup: "Fenêtre à l'écran de tous", chat_mode_alert: "Alerte rouge (avec alarme)", chat_placeholder: "Votre message…", chat_readonly: "Lecture seule : votre rôle ne permet pas d'envoyer de messages.",
     ch_Global: "Global", ch_Faction: "Faction", ch_Alliance: "Alliance", ch_SinglePlayer: "Privé", ch_Server: "Serveur",
     joined: "{0} s'est connecté à {1}", left: "{0} s'est déconnecté de {1}",
     err_mod_not_connected: "Le mod EAM n'est pas encore connecté à ce serveur.", err_server_not_running: "Le serveur n'est pas en ligne.",
@@ -27,7 +27,7 @@ extend({
     col_level: "Level", col_ping: "Ping", col_online: "Online for", col_players: "Players", col_mem: "Memory",
     col_structs: "Structures", col_pid: "Process",
     chat_empty: "No message yet.", chat_older: "Older messages", translate: "Translate", chat_mode_chat: "In the chat",
-    chat_mode_popup: "Message box on everyone's screen", chat_placeholder: "Your message…", chat_readonly: "Read only: your role cannot send messages.",
+    chat_mode_popup: "Message box on everyone's screen", chat_mode_alert: "Red alert (with alarm)", chat_placeholder: "Your message…", chat_readonly: "Read only: your role cannot send messages.",
     ch_Global: "Global", ch_Faction: "Faction", ch_Alliance: "Alliance", ch_SinglePlayer: "Private", ch_Server: "Server",
     joined: "{0} joined {1}", left: "{0} left {1}",
     err_mod_not_connected: "The EAM mod is not connected to this server yet.", err_server_not_running: "The server is not online.",
@@ -137,7 +137,7 @@ export async function renderChat(el, s, me) {
     <div class="chat" id="chat-list"></div>
     ${canSend ? html`<form class="console-form" id="chat-form">
         <input name="text" type="text" maxlength="300" autocomplete="off" placeholder="${t("chat_placeholder")}">
-        <select name="mode"><option value="chat">${t("chat_mode_chat")}</option><option value="popup">${t("chat_mode_popup")}</option>
+        <select name="mode"><option value="chat">${t("chat_mode_chat")}</option><option value="popup">${t("chat_mode_popup")}</option><option value="alert">${t("chat_mode_alert")}</option>
           ${online.length ? html`<option value="private">${t("chat_mode_private")}</option>` : ""}</select>
         <select name="player" hidden>${online.map((p) => html`<option value="${p.id}">${p.name}</option>`)}</select>
         <button class="btn primary">${t("send")}</button></form>`
@@ -207,7 +207,7 @@ export async function renderChat(el, s, me) {
       if (f.mode.value === "private") body.playerId = Number(f.player.value);
       await api.post(`/api/servers/${s.id}/chat`, body);
       f.text.value = "";
-      if (f.mode.value === "popup") toast(t("saved"));
+      if (f.mode.value === "popup" || f.mode.value === "alert") toast(t("saved"));
     } catch (ex) { toast(errorText(ex.code), true); }
     f.querySelector("button").disabled = false;
     f.text.focus();

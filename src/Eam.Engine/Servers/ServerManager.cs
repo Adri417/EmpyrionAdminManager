@@ -595,17 +595,22 @@ public sealed class ServerManager : BackgroundService
             var text = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
             for (var left = delayMinutes; left > 0; left--)
             {
-                // Like EAH: a message every minute of the last 5 (and at the start, 10 and 15 when longer),
-                // then at 1 minute every player is kicked so the save happens with nobody in game.
+                // Like EAH: red alerts (alarm sound) at 5, 3, 2 and 1 minute, also written in the chat;
+                // at 1 minute every player is kicked so the save happens with nobody in game.
                 if (left == 1)
                 {
-                    await TrySay(def, "Deconnexion des joueurs, redemarrage dans 1 min / Players are being disconnected, restart in 1 min");
+                    await Announce(def, "Redemarrage du serveur dans 1 minute, deconnexion des joueurs / Server restart in 1 minute, players are being disconnected", alert: true);
+                    await Task.Delay(TimeSpan.FromSeconds(5), cts.Token); // time to read it
                     await KickEveryone(def);
                 }
-                else if (left == delayMinutes || left <= 5 || left is 10 or 15)
-                    await TrySay(def, text is null
-                        ? $"Redemarrage du serveur dans {left} min, deconnectez-vous ! / Server restart in {left} min, please log out!"
-                        : $"{text} - {left} min - deconnectez-vous / please log out");
+                else if (left is 5 or 3 or 2)
+                    await Announce(def, text is null
+                        ? $"Redemarrage du serveur dans {left} minutes, deconnectez-vous ! / Server restart in {left} minutes, please log out!"
+                        : $"{text} - {left} min - deconnectez-vous / please log out", alert: true);
+                else if (left == delayMinutes || left is 10 or 15 or 30)
+                    await Announce(def, text is null
+                        ? $"Redemarrage du serveur dans {left} minutes / Server restart in {left} minutes"
+                        : $"{text} - {left} min", alert: false);
                 rt.ProgressText = $"{left} min";
                 await Push(def.Id);
                 await Task.Delay(TimeSpan.FromMinutes(1), cts.Token);
@@ -1042,6 +1047,15 @@ public sealed class ServerManager : BackgroundService
 
     /// <summary>Kicks every online player (set by the player service: the manager does not know who is online).</summary>
     public Func<long, string, Task<int>>? KickAllPlayers { get; set; }
+
+    /// <summary>Red alert with the alarm sound (set by the live service).</summary>
+    public Func<long, string, Task<bool>>? RedAlert { get; set; }
+
+    private async Task Announce(ServerDefinition def, string text, bool alert)
+    {
+        if (alert && RedAlert is { } red && !await red(def.Id, text)) ServerLog(def, "Red alert not sent (EAM mod not connected): chat only");
+        await TrySay(def, text);
+    }
 
     private async Task KickEveryone(ServerDefinition def)
     {

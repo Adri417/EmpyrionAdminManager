@@ -353,6 +353,10 @@ public sealed class GameplaySettings : IFeatureSettings
     public bool EventsEnabled { get; set; } = true;
     public string EventsPrefix { get; set; } = "EV:";
 
+    /// <summary>New Empyrion build on Steam: "off", "notify" (badge + journal) or "auto" (countdown, backup, update, restart).</summary>
+    public string GameUpdateMode { get; set; } = "notify";
+    public bool GameUpdateBackupFirst { get; set; } = true;
+
     public static readonly string[] DefaultOres =
         ["IronOre", "CopperOre", "SiliconOre", "CobaltOre", "MagnesiumOre", "NeodymiumOre", "PromethiumOre", "ErestrumOre",
          "ZascosiumOre", "SathiumOre", "GoldOre", "TitanOre", "PentaxidOre"];
@@ -360,6 +364,7 @@ public sealed class GameplaySettings : IFeatureSettings
     public void Validate()
     {
         FeatureStore.Need(AutominerPrefix.Trim().Length is >= 1 and <= 8 && EventsPrefix.Trim().Length is >= 1 and <= 8, "invalid_prefix");
+        FeatureStore.Need(GameUpdateMode is "off" or "notify" or "auto", "invalid_value");
         FeatureStore.Need(AutominerMaxLevel is >= 1 and <= 50 && FuelPricePerHour >= 0 && MaxStoredHours is >= 1 and <= 24 * 30, "invalid_value");
         FeatureStore.Need(Ores.All(o => Regex.IsMatch(o.Key, "^[A-Za-z0-9_]{1,24}$") && o.ItemId > 0 && o.PerHour > 0 && o.Price >= 0), "invalid_ore");
         FeatureStore.Need(Ores.Select(o => o.Key.ToLowerInvariant()).Distinct().Count() == Ores.Count, "invalid_ore");

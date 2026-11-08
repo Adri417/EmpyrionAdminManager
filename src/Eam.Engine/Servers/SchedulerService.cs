@@ -116,7 +116,7 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
         {
             case "message":
                 if (string.IsNullOrWhiteSpace(p.Text) || p.Text.Length > 300) throw new ServerException("message_empty");
-                if (p.Mode is not ("chat" or "popup")) p.Mode = "chat";
+                if (p.Mode is not ("chat" or "popup" or "alert")) p.Mode = "chat";
                 break;
             case "command":
                 if (string.IsNullOrWhiteSpace(p.Command) || p.Command.Length > 500 || p.Command.IndexOfAny(['\r', '\n']) >= 0) throw new ServerException("invalid_command");

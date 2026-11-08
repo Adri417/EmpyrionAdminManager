@@ -7,6 +7,8 @@ import { atLeast, fail, when, num, dialog, settingsForm } from "./ui.js";
 extend({
   fr: {
     tab_mods: "Mods", tab_gameplay: "Gameplay", tab_maintenance: "Maintenance",
+    gp_gu: "Mises à jour du jeu", gp_gu_hint: "EAM regarde sur Steam toutes les heures si une nouvelle version d'Empyrion est sortie. En automatique : alertes rouges à 5, 3, 2 et 1 min, joueurs déconnectés à 1 min, sauvegarde, mise à jour, redémarrage. Les scénarios, mods, sauvegardes et la config ne sont pas touchés. Une version déjà essayée n'est jamais réessayée.",
+    gp_gu_mode: "Nouvelle version d'Empyrion", gp_gu_off: "Ne rien faire", gp_gu_notify: "Prévenir seulement", gp_gu_auto: "Mettre à jour automatiquement", gp_gu_backup: "Sauvegarder avant la mise à jour",
     md_title: "Mods du serveur", md_hint: "Les mods actifs sont dans game\\Content\\Mods. Désactiver un mod le range dans eam\\mods-disabled, le supprimer le garde dans eam\\mods-removed. Le serveur doit être arrêté pour installer, activer, désactiver ou supprimer.",
     md_install: "Installer un mod (.zip ou .dll)", md_none: "Aucun mod installé (hors mod EAM).", md_enabled: "Actif", md_disabled: "Désactivé",
     md_enable: "Activer", md_disable: "Désactiver", md_remove: "Supprimer", md_configs: "Fichiers de réglages", md_edit: "Modifier {0}",
@@ -40,6 +42,8 @@ extend({
   },
   en: {
     tab_mods: "Mods", tab_gameplay: "Gameplay", tab_maintenance: "Maintenance",
+    gp_gu: "Game updates", gp_gu_hint: "EAM checks Steam every hour for a new Empyrion version. Automatic: red alerts at 5, 3, 2 and 1 min, players kicked at 1 min, backup, update, restart. Scenarios, mods, saves and the configuration are not touched. A version already tried is never tried again.",
+    gp_gu_mode: "New Empyrion version", gp_gu_off: "Do nothing", gp_gu_notify: "Notify only", gp_gu_auto: "Update automatically", gp_gu_backup: "Back up before updating",
     md_title: "Server mods", md_hint: "Active mods are in game\\Content\\Mods. Disabling a mod moves it to eam\\mods-disabled, removing it keeps it in eam\\mods-removed. The server must be stopped to install, enable, disable or remove.",
     md_install: "Install a mod (.zip or .dll)", md_none: "No mod installed (besides the EAM mod).", md_enabled: "Enabled", md_disabled: "Disabled",
     md_enable: "Enable", md_disable: "Disable", md_remove: "Remove", md_configs: "Settings files", md_edit: "Edit {0}",
@@ -161,6 +165,9 @@ async function gameplay(el, s, me) {
     { title: t("gp_events"), hint: t("gp_ev_hint"), open: false, fields: [
       { k: "eventsEnabled", type: "check", label: t("gp_ev_on") },
       { k: "eventsPrefix", type: "text", label: t("gp_ev_prefix") }] },
+    { title: t("gp_gu"), hint: t("gp_gu_hint"), open: false, fields: [
+      { k: "gameUpdateMode", type: "select", label: t("gp_gu_mode"), options: [["off", t("gp_gu_off")], ["notify", t("gp_gu_notify")], ["auto", t("gp_gu_auto")]] },
+      { k: "gameUpdateBackupFirst", type: "check", label: t("gp_gu_backup") }] },
   ]);
   const first = $("#gp-form details", el);
   const b = document.createElement("div");
