@@ -27,6 +27,7 @@ public sealed class PlayerService
     public PlayerService(ServerManager manager, LiveService live, ILogger<PlayerService> log)
     {
         _manager = manager;
+        manager.KickAllPlayers = (id, reason) => KickAllAsync(id, reason, "EAM (restart)");
         _live = live;
         _log = log;
         _live.PlayerJoined += DeliverOfflineMessagesAsync;

@@ -595,8 +595,14 @@ public sealed class ServerManager : BackgroundService
             var text = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
             for (var left = delayMinutes; left > 0; left--)
             {
-                // Like EAH: a countdown in game that asks players to log out before the save.
-                if (left == delayMinutes || left is 10 or 5 or 3 or 2 or 1)
+                // Like EAH: a message every minute of the last 5 (and at the start, 10 and 15 when longer),
+                // then at 1 minute every player is kicked so the save happens with nobody in game.
+                if (left == 1)
+                {
+                    await TrySay(def, "Deconnexion des joueurs, redemarrage dans 1 min / Players are being disconnected, restart in 1 min");
+                    await KickEveryone(def);
+                }
+                else if (left == delayMinutes || left <= 5 || left is 10 or 15)
                     await TrySay(def, text is null
                         ? $"Redemarrage du serveur dans {left} min, deconnectez-vous ! / Server restart in {left} min, please log out!"
                         : $"{text} - {left} min - deconnectez-vous / please log out");
@@ -615,6 +621,8 @@ public sealed class ServerManager : BackgroundService
         }
         finally { rt.StopCountdown = null; }
 
+        // Anyone who came back during the last minute.
+        if (delayMinutes > 0) await KickEveryone(def);
         rt.ProgressText = "saveandexit";
         await Push(def.Id);
         try
@@ -1030,6 +1038,16 @@ public sealed class ServerManager : BackgroundService
             try { p.Kill(entireProcessTree: true); p.WaitForExit(10_000); } catch { }
             p.Dispose();
         }
+    }
+
+    /// <summary>Kicks every online player (set by the player service: the manager does not know who is online).</summary>
+    public Func<long, string, Task<int>>? KickAllPlayers { get; set; }
+
+    private async Task KickEveryone(ServerDefinition def)
+    {
+        if (KickAllPlayers is null) return;
+        try { await KickAllPlayers(def.Id, "Redemarrage du serveur / Server restart"); }
+        catch (Exception e) { ServerLog(def, "Kick before stop failed: " + e.Message); }
     }
 
     private async Task TrySay(ServerDefinition def, string text)
