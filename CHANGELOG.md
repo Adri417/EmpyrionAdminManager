@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.18 (2026-11-08) - Compte à rebours de redémarrage
+- Avant un redémarrage ou un arrêt programmé, les messages en jeu demandent aux joueurs de se déconnecter, comme EAH (FR/EN), à chaque étape du compte à rebours (début, 10, 5, 3, 2, 1 min).
+
 ## 0.9.17 (2026-11-08) - Chat qui remontait tout seul
 - Corrigé pour de bon : quand un serveur tourne, chaque mise à jour en direct (toutes les quelques secondes) remettait le chat, la console et les journaux tout en haut. Les positions de défilement sont maintenant relevées avant de reconstruire la page. On peut lire les anciens messages à la molette sans être renvoyé ailleurs, et la liste suit les nouveaux messages seulement si on est déjà en bas.
 

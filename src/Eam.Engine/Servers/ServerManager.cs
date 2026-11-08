@@ -592,11 +592,14 @@ public sealed class ServerManager : BackgroundService
         rt.StopCountdown = cts;
         try
         {
-            var text = string.IsNullOrWhiteSpace(message) ? "Server restart" : message.Trim();
+            var text = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
             for (var left = delayMinutes; left > 0; left--)
             {
+                // Like EAH: a countdown in game that asks players to log out before the save.
                 if (left == delayMinutes || left is 10 or 5 or 3 or 2 or 1)
-                    await TrySay(def, $"{text} - {left} min");
+                    await TrySay(def, text is null
+                        ? $"Redemarrage du serveur dans {left} min, deconnectez-vous ! / Server restart in {left} min, please log out!"
+                        : $"{text} - {left} min - deconnectez-vous / please log out");
                 rt.ProgressText = $"{left} min";
                 await Push(def.Id);
                 await Task.Delay(TimeSpan.FromMinutes(1), cts.Token);
