@@ -110,3 +110,16 @@ public class PortableMigrationTests
         Assert.Equal("new", File.ReadAllText(Path.Combine(now, "eam.db")));
     }
 }
+
+public class CopyImportTests
+{
+    [Fact]
+    public void PathsOfTheOriginalAreMovedIntoTheCopy()
+    {
+        var from = Path.Combine(Path.GetTempPath(), "orig", "re2");
+        var to = Path.Combine(Path.GetTempPath(), "eam", "servers", "re2", "game");
+        Assert.Equal(Path.Combine(to, "Saves"), Eam.Engine.Servers.ServerManager.RebasePath(Path.Combine(from, "Saves"), from, to));
+        Assert.Null(Eam.Engine.Servers.ServerManager.RebasePath("Saves", from, to));
+        Assert.Null(Eam.Engine.Servers.ServerManager.RebasePath(Path.Combine(Path.GetTempPath(), "elsewhere", "Saves"), from, to));
+    }
+}

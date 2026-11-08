@@ -263,6 +263,22 @@ public sealed class ServerManager : BackgroundService
                 try
                 {
                     var skipped = await Task.Run(() => CopyTree(gameDir, def.GameDir, rt));
+                    // Paths of the old server written in its yaml (save folder...) now point into the copy:
+                    // the copy must never play on the original's save.
+                    foreach (var key in new[] { "SaveDirectory" })
+                        if (yaml.Get("GameConfig", key) is { Length: > 0 } v0 && RebasePath(v0, gameDir, def.GameDir) is { } n0) yaml.Set("GameConfig", key, n0);
+                        else if (yaml.Get("ServerConfig", key) is { Length: > 0 } v1 && RebasePath(v1, gameDir, def.GameDir) is { } n1) yaml.Set("ServerConfig", key, n1);
+                    // A copied EAH plugin would run without EAH and get in EAM's way: put it aside (not deleted).
+                    var mods = Path.Combine(def.GameDir, "Content", "Mods");
+                    if (Directory.Exists(mods))
+                        foreach (var mod in Directory.GetDirectories(mods))
+                            if (Directory.EnumerateFiles(mod, "EAH*.dll", SearchOption.AllDirectories).Any())
+                            {
+                                var aside = Path.Combine(def.EamDir, "mods-set-aside", Path.GetFileName(mod));
+                                Directory.CreateDirectory(Path.GetDirectoryName(aside)!);
+                                Eam.Core.SafeFs.MoveDirectory(mod, aside);
+                                ServerLog(def, $"EAH plugin {Path.GetFileName(mod)} set aside in {aside} (EAM replaces EAH)");
+                            }
                     ApplyManagedKeys(yaml, def);
                     yaml.Save(def.YamlFile);
                     _store.Update(def with { Installed = true });
@@ -832,6 +848,14 @@ public sealed class ServerManager : BackgroundService
         if (allowNotInstalled && rt.State == ServerState.NotInstalled) return;
         if (rt.State == ServerState.NotInstalled) throw new ServerException("not_installed");
         throw new ServerException("server_must_be_stopped");
+    }
+
+    /// <summary>A path inside <paramref name="from"/> moved to the same place inside <paramref name="to"/> (null when it is elsewhere).</summary>
+    internal static string? RebasePath(string value, string from, string to)
+    {
+        var v = value.Trim().Trim('"', '\'');
+        if (!Path.IsPathFullyQualified(v) || !IsUnder(v, from)) return null;
+        return Path.Combine(to, Path.GetRelativePath(from, v));
     }
 
     /// <summary>Free space on the drive of a folder (null when unknown).</summary>
