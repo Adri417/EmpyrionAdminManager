@@ -118,6 +118,8 @@ builder.WebHost.ConfigureKestrel(k =>
     k.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
     // Local interface: only this machine can reach it.
     k.Listen(IPAddress.Loopback, config.LocalPort);
+    // Reverse proxy on this machine (Apache...): loopback only, the proxy does HTTPS.
+    if (config.RemoteAccess.ProxyPort > 0) k.Listen(IPAddress.Loopback, config.RemoteAccess.ProxyPort);
     if (config.RemoteAccess.Enabled)
     {
         using var lf = LoggerFactory.Create(l => l.AddProvider(new FileLoggerProvider(paths.LogsDir)));
@@ -149,6 +151,7 @@ if (letsEncrypt is not null)
         ctx.Response.Redirect($"https://{letsEncrypt.Domain}:{config.RemoteAccess.Port}{path}");
     });
 }
+app.UseMiddleware<ProxyHeadersMiddleware>();
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions

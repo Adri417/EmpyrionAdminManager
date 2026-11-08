@@ -53,3 +53,20 @@ public class AuditGapTests
         Assert.Equal(3, data.RecentChat(50, null, null).Count);
     }
 }
+
+public class ProxyPortTests
+{
+    [Fact]
+    public void ProxyPortMustBeFreeAndDifferent()
+    {
+        var c = new Eam.Core.Config.EamConfig { LocalPort = 8790 };
+        c.RemoteAccess.ProxyPort = 8792;
+        c.Validate();
+        c.RemoteAccess.ProxyPort = 8790;
+        Assert.Throws<InvalidDataException>(() => c.Validate());
+        c.RemoteAccess.ProxyPort = 70000;
+        Assert.Throws<InvalidDataException>(() => c.Validate());
+        c.RemoteAccess.ProxyPort = 0;
+        c.Validate();
+    }
+}

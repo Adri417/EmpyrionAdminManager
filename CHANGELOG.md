@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.10 (2026-11-08) - Accès derrière Apache, nginx ou IIS
+- Nouveau réglage « Port pour le serveur web » : si un serveur web de la machine gère déjà HTTPS pour un domaine, il peut renvoyer vers EAM sans qu'EAM croie que les visiteurs sont sur la machine. Adresse réelle des visiteurs reprise pour la protection contre les essais de mot de passe.
+
 ## 0.9.9 (2026-11-08) - Import plus sûr
 - Import EAH en mode « copier » : refusé si l'ancien serveur tourne encore, pour ne jamais copier une sauvegarde en cours d'écriture.
 

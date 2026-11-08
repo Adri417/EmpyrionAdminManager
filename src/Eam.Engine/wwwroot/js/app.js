@@ -332,6 +332,9 @@ async function renderSettings(page) {
     </div>
     <label>${t("cert_path")}</label><input name="certificatePath" type="text" value="${s.certificatePath}">
     <div class="hint">${t("remote_warn")}</div>
+    <h3 class="section">${t("proxy_title")}</h3>
+    <label>${t("proxy_port")}</label><input name="proxyPort" type="number" min="0" max="65535" value="${s.proxyPort ?? 0}">
+    <div class="hint">${t("proxy_hint")}</div>
     <h3 class="section">Let's Encrypt</h3>
     <label class="check"><input name="leEnabled" type="checkbox" ${raw(s.letsEncrypt?.enabled ? "checked" : "")}> ${t("le_enable")}</label>
     <div class="form-row">
@@ -350,7 +353,7 @@ async function renderSettings(page) {
     const f = e.target;
     try {
       const r = await api.put("/api/settings", {
-        localPort: +f.localPort.value, remoteEnabled: f.remoteEnabled.checked, remotePort: +f.remotePort.value,
+        localPort: +f.localPort.value, remoteEnabled: f.remoteEnabled.checked, remotePort: +f.remotePort.value, proxyPort: +f.proxyPort.value,
         certificatePath: f.certificatePath.value, certificatePassword: f.certificatePassword.value,
         language: f.language.value, sessionDays: +f.sessionDays.value,
         letsEncrypt: { enabled: f.leEnabled.checked, domain: f.leDomain.value.trim(), email: f.leEmail.value.trim(), httpPort: +f.lePort.value, acceptTerms: f.leTerms.checked },

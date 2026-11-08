@@ -60,6 +60,9 @@ public sealed class EamConfig
         if (RemoteAccess.Port is < 1 or > 65535) throw new InvalidDataException("remoteAccess.port must be between 1 and 65535.");
         if (RemoteAccess.Enabled && RemoteAccess.Port == LocalPort)
             throw new InvalidDataException("remoteAccess.port must differ from localPort.");
+        if (RemoteAccess.ProxyPort != 0 && (RemoteAccess.ProxyPort is < 1 or > 65535 || RemoteAccess.ProxyPort == LocalPort
+                                            || (RemoteAccess.Enabled && RemoteAccess.ProxyPort == RemoteAccess.Port)))
+            throw new InvalidDataException("remoteAccess.proxyPort must be 0 or a free port different from the other ports.");
         if (SessionDays is < 1 or > 365) SessionDays = 14;
         var le = RemoteAccess.LetsEncrypt;
         if (le.Enabled)
@@ -79,6 +82,12 @@ public sealed class RemoteAccessConfig
     public bool Enabled { get; set; }
 
     public int Port { get; set; } = 8791;
+
+    /// <summary>
+    /// Port for a reverse proxy on this machine (Apache, nginx, IIS) that already serves HTTPS for a domain.
+    /// Listens on 127.0.0.1 only, plain HTTP; requests on it are treated as remote. 0 = off.
+    /// </summary>
+    public int ProxyPort { get; set; }
 
     /// <summary>Optional .pfx certificate. Empty = a self-signed certificate is generated in the data folder.</summary>
     public string CertificatePath { get; set; } = "";
