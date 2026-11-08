@@ -5,7 +5,7 @@ using Eam.Core.Servers.Eah;
 namespace Eam.Engine.Servers;
 
 public sealed record ImportPreviewRequest(string Path);
-public sealed record ImportRequest(string Path, string Mode, long? ServerId, string? Name, EahImportOptions? Options, string? DisplayName = null);
+public sealed record ImportRequest(string Path, string Mode, long? ServerId, string? Name, EahImportOptions? Options, string? DisplayName = null, string? Folder = null);
 
 /// <summary>
 /// "Import a server": the admin gives the folder of a server that used EAH (or any Empyrion server),
@@ -60,6 +60,7 @@ public sealed class ImportService(ServerManager manager, LiveService live, EamPa
         return new
         {
             configDir = config, gameDir, yaml = yamlName, name = srvName, port, size,
+            serversFolder = paths.ServersDir, freeBytes = ServerManager.FreeBytes(paths.ServersDir),
             existingServerId = existing?.Id,
             counts = eah?.Counts, eah = eah?.Server, missing = eah?.Missing,
         };
@@ -84,7 +85,7 @@ public sealed class ImportService(ServerManager manager, LiveService live, EamPa
                     var gameDir = GameDirOf(path) ?? (config is null ? null : EahReader.FindGameDir(config)) ?? throw new ServerException("not_an_empyrion_server");
                     string? yamlName = null;
                     if (config is not null && EahReader.Settings(config).GetValueOrDefault("Dedicated") is { Length: > 0 } y) yamlName = Path.GetFileName(y);
-                    def = await manager.AdoptAsync(req.Name, gameDir, yamlName, req.Mode == "copy", by, req.DisplayName);
+                    def = await manager.AdoptAsync(req.Name, gameDir, yamlName, req.Mode == "copy", by, req.DisplayName, req.Mode == "copy" ? req.Folder : null);
                     break;
                 default: throw new ServerException("invalid_mode");
             }

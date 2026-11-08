@@ -158,7 +158,7 @@ public sealed class ServerManager : BackgroundService
             var all = _store.List();
             if (all.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))) throw new ServerException("name_taken");
             var slug = UniqueSlug(Slug.From(name), all);
-            var root = Path.Combine(_paths.ServersDir, slug);
+            var root = Path.Combine(ServersParent(null), slug);
             EnsureFolderFree(root, all);
 
             var suggestion = PortAllocator.Suggest(all);
@@ -192,7 +192,7 @@ public sealed class ServerManager : BackgroundService
     /// copy = true copies the whole folder into EAM's servers folder (the original is not touched);
     /// copy = false uses the folder in place. Ports, telnet password and options come from its dedicated yaml.
     /// </summary>
-    public async Task<ServerDefinition> AdoptAsync(string? name, string gameDir, string? yamlName, bool copy, string by, string? displayName = null)
+    public async Task<ServerDefinition> AdoptAsync(string? name, string gameDir, string? yamlName, bool copy, string by, string? displayName = null, string? parentFolder = null)
     {
         gameDir = Path.GetFullPath((gameDir ?? "").Trim().Trim('"'));
         if (!Directory.Exists(gameDir)) throw new ServerException("not_found", gameDir);
@@ -226,7 +226,7 @@ public sealed class ServerManager : BackgroundService
             if (PortAllocator.Check(gamePort, telnetPort, all) is { } portError) throw new ServerException(portError);
             var telnetPwd = yaml.Get("ServerConfig", "Tel_Pwd") is { Length: >= 4 } pwd ? pwd : NewSecret();
             var slug = UniqueSlug(Slug.From(cleanName), all);
-            var root = Path.Combine(_paths.ServersDir, slug);
+            var root = Path.Combine(ServersParent(parentFolder), slug);
             EnsureFolderFree(root, all);
             Directory.CreateDirectory(root);
             var def = _store.Add(new ServerDefinition
@@ -245,6 +245,14 @@ public sealed class ServerManager : BackgroundService
                 rt.State = ServerState.Stopped;
                 await BroadcastListAsync();
                 return def;
+            }
+            long needed = 0;
+            try { needed = new DirectoryInfo(gameDir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length); } catch { }
+            if (FreeBytes(root) is { } free && free < needed + 2L * 1024 * 1024 * 1024)
+            {
+                _store.Remove(def.Id);
+                try { Directory.Delete(root, true); } catch { }
+                throw new ServerException("not_enough_space", $"{needed / 1_073_741_824.0:0.0} GB / {free / 1_073_741_824.0:0.0} GB");
             }
             rt.State = ServerState.Installing;
             rt.Progress = 0;
@@ -321,9 +329,9 @@ public sealed class ServerManager : BackgroundService
             if (!string.Equals(slug, def.Slug, StringComparison.OrdinalIgnoreCase))
             {
                 slug = UniqueSlug(slug, all);
-                var newRoot = Path.Combine(_paths.ServersDir, slug);
+                var newRoot = Path.Combine(Path.GetDirectoryName(def.RootDir.TrimEnd('\\', '/'))!, slug);
                 EnsureFolderFree(newRoot, all);
-                if (IsUnder(def.RootDir, _paths.ServersDir))
+                if (CreatedByEam(def))
                 {
                     Eam.Core.SafeFs.MoveDirectory(def.RootDir, newRoot);
                     updated = updated with { Slug = slug, RootDir = newRoot };
@@ -390,7 +398,7 @@ public sealed class ServerManager : BackgroundService
             if (deleteFiles)
             {
                 // Safety: only ever delete a folder EAM created inside its own servers folder.
-                if (!IsUnder(def.RootDir, _paths.ServersDir)) throw new ServerException("unsafe_delete");
+                if (!CreatedByEam(def)) throw new ServerException("unsafe_delete");
                 await Task.Run(() => Directory.Delete(def.RootDir, recursive: true));
             }
             _log.LogWarning("{By} removed server '{Name}' (files {Files})", by, def.Name, deleteFiles ? "deleted" : "kept");
@@ -824,6 +832,36 @@ public sealed class ServerManager : BackgroundService
         if (allowNotInstalled && rt.State == ServerState.NotInstalled) return;
         if (rt.State == ServerState.NotInstalled) throw new ServerException("not_installed");
         throw new ServerException("server_must_be_stopped");
+    }
+
+    /// <summary>Free space on the drive of a folder (null when unknown).</summary>
+    public static long? FreeBytes(string folder)
+    {
+        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(folder))!).AvailableFreeSpace; } catch { return null; }
+    }
+
+    /// <summary>Folder that receives a new server: the one given (full path), or the servers folder of the settings.</summary>
+    private string ServersParent(string? parentFolder)
+    {
+        var dir = string.IsNullOrWhiteSpace(parentFolder) ? _paths.ServersDir : parentFolder.Trim().Trim('"');
+        if (!Path.IsPathFullyQualified(dir)) throw new ServerException("servers_folder_unusable", dir);
+        dir = Path.GetFullPath(dir);
+        try { Directory.CreateDirectory(dir); }
+        catch (Exception e) { throw new ServerException("servers_folder_unusable", $"{dir}: {e.Message}"); }
+        return dir;
+    }
+
+    /// <summary>
+    /// Safety for deleting or moving a server folder: only a folder EAM made itself, i.e. named after the
+    /// server and holding EAM's own "eam" sub-folder, and never the game folder of a server used in place.
+    /// </summary>
+    private static bool CreatedByEam(ServerDefinition def)
+    {
+        var root = Path.GetFullPath(def.RootDir).TrimEnd('\\', '/');
+        if (!string.Equals(Path.GetFileName(root), def.Slug, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!Directory.Exists(Path.Combine(root, "eam"))) return false;
+        if (def.GameDirOverride is { } g && (IsUnder(g, root) || IsUnder(root, g))) return false;
+        return Path.GetPathRoot(root) != root;
     }
 
     private void EnsureFolderFree(string root, IEnumerable<ServerDefinition> others)

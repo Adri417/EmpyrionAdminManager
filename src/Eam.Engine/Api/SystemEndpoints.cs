@@ -6,7 +6,7 @@ using Eam.Core.Security;
 namespace Eam.Engine.Api;
 
 public sealed record SettingsRequest(int LocalPort, bool RemoteEnabled, int RemotePort, string? CertificatePath, string? CertificatePassword, string Language, int SessionDays,
-    LetsEncryptConfig? LetsEncrypt = null, int ProxyPort = 0);
+    LetsEncryptConfig? LetsEncrypt = null, int ProxyPort = 0, string? ServersFolder = null);
 
 public static class SystemEndpoints
 {
@@ -20,6 +20,9 @@ public static class SystemEndpoints
             configFile = paths.ConfigFile,
             version = AppInfo.Version,
             localPort = cfg.LocalPort,
+            serversFolder = cfg.ServersFolder,
+            serversFolderInUse = paths.ServersDir,
+            serversFolderDefault = paths.DefaultServersDir,
             remoteEnabled = cfg.RemoteAccess.Enabled,
             remotePort = cfg.RemoteAccess.Port,
             proxyPort = cfg.RemoteAccess.ProxyPort,
@@ -38,6 +41,7 @@ public static class SystemEndpoints
             var next = new EamConfig
             {
                 LocalPort = req.LocalPort,
+                ServersFolder = req.ServersFolder?.Trim().Trim('"') ?? current.ServersFolder,
                 Language = req.Language,
                 SessionDays = req.SessionDays,
                 RemoteAccess = new RemoteAccessConfig
@@ -56,7 +60,14 @@ public static class SystemEndpoints
             if (next.RemoteAccess.CertificatePath.Length > 0 && !File.Exists(next.RemoteAccess.CertificatePath))
                 return Results.BadRequest(new { error = "certificate_not_found" });
 
+            if (next.ServersFolder.Length > 0)
+            {
+                try { Directory.CreateDirectory(next.ServersFolder); }
+                catch { return Results.BadRequest(new { error = "servers_folder_unusable" }); }
+            }
             next.Save(paths);
+            // New servers go to the new folder right away; existing servers stay where they are.
+            paths.UseServersFolder(next.ServersFolder);
             lf.CreateLogger("Settings").LogInformation("{By} changed the settings", ctx.User.Identity?.Name);
             var restart = next.LocalPort != current.LocalPort || next.RemoteAccess.Enabled != current.RemoteAccess.Enabled
                           || next.RemoteAccess.Port != current.RemoteAccess.Port || next.RemoteAccess.ProxyPort != current.RemoteAccess.ProxyPort || next.RemoteAccess.CertificatePath != current.RemoteAccess.CertificatePath

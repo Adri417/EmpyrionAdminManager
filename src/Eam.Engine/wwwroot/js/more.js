@@ -3,6 +3,9 @@ import { extend } from "./i18n.js";
 
 extend({
   fr: {
+    imp_folder: "Dossier où copier le serveur", imp_folder_hint: "Le serveur va dans un sous-dossier à son nom. À copier : {0}. Libre sur ce disque : {1}.",
+    servers_folder: "Dossier des nouveaux serveurs", servers_folder_hint: "Vide = à côté du programme EAM. Utilisé maintenant : {0}. Les serveurs existants ne bougent pas.",
+    err_not_enough_space: "Pas assez de place sur le disque.", err_servers_folder_unusable: "Ce dossier n'est pas utilisable (chemin complet, ex. F:\\EAM\\servers).",
     sc_monthly: "Tous les mois", sc_month_day: "Jour du mois (1 à 28)", sc_monthly_desc: "le {0} du mois à {1}", err_invalid_day: "Jour du mois : de 1 à 28.",
     err_copy_skipped: "Copie terminée, mais Windows a refusé de laisser lire ces fichiers, qui n'ont pas été copiés", err_invalid_display_name: "Nom dans la liste du jeu invalide (100 caractères max).",
     rn_display: "Nom dans la liste des serveurs du jeu", rn_display_hint: "Vide = le même que le nom EAM. Le nom EAM sert aussi de nom de dossier : gardez-le court (ex. RE2).",
@@ -66,6 +69,9 @@ extend({
     err_scenario_delete_failed: "Le scénario n'a pas pu être supprimé.", err_server_running: "Arrêtez le serveur d'abord.", err_unknown_ore: "Minerai inconnu.",
   },
   en: {
+    imp_folder: "Folder to copy the server to", imp_folder_hint: "The server goes into a sub-folder with its name. To copy: {0}. Free on this drive: {1}.",
+    servers_folder: "Folder for new servers", servers_folder_hint: "Empty = next to the EAM program. In use now: {0}. Existing servers do not move.",
+    err_not_enough_space: "Not enough space on the drive.", err_servers_folder_unusable: "This folder cannot be used (full path, e.g. F:\\EAM\\servers).",
     sc_monthly: "Every month", sc_month_day: "Day of the month (1 to 28)", sc_monthly_desc: "day {0} of the month at {1}", err_invalid_day: "Day of the month: 1 to 28.",
     err_copy_skipped: "Copy finished, but Windows did not let EAM read these files, which were not copied", err_invalid_display_name: "Invalid name for the game list (100 characters max).",
     rn_display: "Name in the game's server list", rn_display_hint: "Empty = same as the EAM name. The EAM name is also the folder name: keep it short (e.g. RE2).",

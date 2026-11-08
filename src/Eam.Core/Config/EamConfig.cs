@@ -12,6 +12,9 @@ public sealed class EamConfig
     /// <summary>Port of the local interface (desktop window and browser on this machine).</summary>
     public int LocalPort { get; set; } = 8790;
 
+    /// <summary>Folder where new game servers are installed or copied. Empty = next to EAM's program (or in the data folder).</summary>
+    public string ServersFolder { get; set; } = "";
+
     public RemoteAccessConfig RemoteAccess { get; set; } = new();
 
     /// <summary>"auto" follows the browser language; otherwise "fr" or "en".</summary>
@@ -63,6 +66,8 @@ public sealed class EamConfig
         if (RemoteAccess.ProxyPort != 0 && (RemoteAccess.ProxyPort is < 1 or > 65535 || RemoteAccess.ProxyPort == LocalPort
                                             || (RemoteAccess.Enabled && RemoteAccess.ProxyPort == RemoteAccess.Port)))
             throw new InvalidDataException("remoteAccess.proxyPort must be 0 or a free port different from the other ports.");
+        if (!string.IsNullOrWhiteSpace(ServersFolder) && !Path.IsPathFullyQualified(ServersFolder.Trim()))
+            throw new InvalidDataException("serversFolder must be a full path (e.g. F:\\EAM\\servers).");
         if (SessionDays is < 1 or > 365) SessionDays = 14;
         var le = RemoteAccess.LetsEncrypt;
         if (le.Enabled)

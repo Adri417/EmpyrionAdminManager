@@ -242,7 +242,13 @@ export async function renderServerDetail(page, id, setTitle) {
     applyBars(page);
     drawActions(s);
     $$(".tabs button", page).forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; shell(); }));
-    if (kept) $("#tab", page).replaceWith(kept);
+    if (kept) {
+      // Moving an element in the page resets the scroll of everything inside it (chat, console, logs):
+      // remember each scroll position and put it back, so a live update never jumps to the top.
+      const scrolled = [kept, ...kept.querySelectorAll("*")].filter((x) => x.scrollTop > 0).map((x) => [x, x.scrollTop]);
+      $("#tab", page).replaceWith(kept);
+      scrolled.forEach(([x, top]) => { x.scrollTop = top; });
+    }
     else drawTab(s);
   };
 
@@ -363,8 +369,12 @@ export async function renderServerDetail(page, id, setTitle) {
         try {
           const r = await api.get(`/api/servers/${id}/logs?kind=${$("#lk", el).value}&lines=400`);
           const out = $("#lo", el);
+          const first = !out.textContent;
+          const atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+          const before = out.scrollTop;
           out.textContent = r.lines.join("\n");
-          out.scrollTop = out.scrollHeight;
+          if (first || atBottom) { out.scrollTop = out.scrollHeight; requestAnimationFrame(() => { out.scrollTop = out.scrollHeight; }); }
+          else out.scrollTop = before;
         } catch (ex) { fail(ex); }
       };
       $("#lr", el).addEventListener("click", load);

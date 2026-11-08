@@ -199,8 +199,8 @@ public sealed class UpdateService(EamPaths paths, IHttpClientFactory http, Serve
             Log "Closing $name ($($_.Id))"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue; $_.WaitForExit(30000) | Out-Null }
         }
         Start-Sleep -Seconds 1
-        robocopy $dst $prev /E /XD (Join-Path $dst 'data') /NFL /NDL /NJH /NJS /R:2 /W:1 | Out-Null
-        robocopy $src $dst /E /XD (Join-Path $src 'data') /XF portable.txt /NFL /NDL /NJH /NJS /R:5 /W:2 | Out-Null
+        robocopy $dst $prev /E /XD (Join-Path $dst 'data') (Join-Path $dst 'servers') /NFL /NDL /NJH /NJS /R:2 /W:1 | Out-Null
+        robocopy $src $dst /E /XD (Join-Path $src 'data') (Join-Path $src 'servers') /XF portable.txt /NFL /NDL /NJH /NJS /R:5 /W:2 | Out-Null
         $code = $LASTEXITCODE
         if ($code -ge 8) {
           Log "Copy failed (robocopy $code): the previous version is put back"

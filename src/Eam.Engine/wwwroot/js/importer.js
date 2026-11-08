@@ -74,7 +74,9 @@ export function importDialog(servers) {
         <select name="server">${servers.map((s) => html`<option value="${s.id}" ${raw(s.id === p.existingServerId ? "selected" : "")}>${s.name}</option>`)}</select>` : ""}
       <div data-new><label>${t("imp_name")}</label><input name="name" maxlength="60" value="${p.name || p.eah?.serverName || ""}">
         <label>${t("rn_display")}</label><input name="displayName" maxlength="100" value="${p.name || p.eah?.serverName || ""}">
-        <div class="hint">${t("rn_display_hint")}</div></div>
+        <div class="hint">${t("rn_display_hint")}</div>
+        <div data-copy><label>${t("imp_folder")}</label><input name="folder" value="${p.serversFolder || ""}">
+          <div class="hint">${t("imp_folder_hint", formatBytes(p.size || 0), p.freeBytes != null ? formatBytes(p.freeBytes) : "?")}</div></div></div>
       ${p.configDir ? html`<details><summary>${t("imp_what")}</summary>
         ${[["players", "imp_o_players"], ["chat", "imp_o_chat"], ["history", "imp_o_history"], ["inventories", "imp_o_inv"], ["structures", "imp_o_structures"],
           ["statistics", "imp_o_stats"], ["settings", "imp_o_settings"], ["tasks", "imp_o_tasks"], ["templates", "imp_o_templates"]]
@@ -84,6 +86,7 @@ export function importDialog(servers) {
     const sync = () => {
       const mode = $$("[name=mode]", f).find((r) => r.checked)?.value;
       $("[data-new]", f).hidden = mode === "existing";
+      if ($("[data-copy]", f)) $("[data-copy]", f).hidden = mode !== "copy";
       if (f.server) f.server.hidden = mode !== "existing";
     };
     $$("[name=mode]", f).forEach((r) => r.addEventListener("change", sync));
@@ -101,7 +104,7 @@ export function importDialog(servers) {
     btn.textContent = t("imp_running");
     try {
       const r = await api.post("/api/import", {
-        path: f.path.value, mode, serverId: mode === "existing" ? +f.server.value : null, name: f.name?.value || null, displayName: f.displayName?.value || null,
+        path: f.path.value, mode, serverId: mode === "existing" ? +f.server.value : null, name: f.name?.value || null, displayName: f.displayName?.value || null, folder: mode === "copy" ? (f.folder?.value || null) : null,
         options: { players: opt("players"), chat: opt("chat"), history: opt("history"), inventories: opt("inventories"), structures: opt("structures"),
           statistics: opt("statistics"), settings: opt("settings"), tasks: opt("tasks"), templates: opt("templates"), inventoryDays: +(f.invDays?.value || 30) },
       });

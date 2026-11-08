@@ -324,6 +324,8 @@ async function renderSettings(page) {
       </select></div>
     </div>
     <label>${t("session_days")}</label><input name="sessionDays" type="number" min="1" max="365" value="${s.sessionDays}">
+    <label>${t("servers_folder")}</label><input name="serversFolder" type="text" value="${s.serversFolder || ""}" placeholder="${s.serversFolderDefault || ""}">
+    <div class="hint">${t("servers_folder_hint", s.serversFolderInUse || "")}</div>
     <h3 class="section">${t("remote_access")}</h3>
     <label class="check"><input name="remoteEnabled" type="checkbox" ${raw(s.remoteEnabled ? "checked" : "")}> ${t("remote_enable")}</label>
     <div class="form-row">
@@ -353,7 +355,7 @@ async function renderSettings(page) {
     const f = e.target;
     try {
       const r = await api.put("/api/settings", {
-        localPort: +f.localPort.value, remoteEnabled: f.remoteEnabled.checked, remotePort: +f.remotePort.value, proxyPort: +f.proxyPort.value,
+        localPort: +f.localPort.value, remoteEnabled: f.remoteEnabled.checked, remotePort: +f.remotePort.value, proxyPort: +f.proxyPort.value, serversFolder: f.serversFolder.value.trim(),
         certificatePath: f.certificatePath.value, certificatePassword: f.certificatePassword.value,
         language: f.language.value, sessionDays: +f.sessionDays.value,
         letsEncrypt: { enabled: f.leEnabled.checked, domain: f.leDomain.value.trim(), email: f.leEmail.value.trim(), httpPort: +f.lePort.value, acceptTerms: f.leTerms.checked },

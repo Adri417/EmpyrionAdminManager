@@ -12,14 +12,45 @@ public sealed class EamPaths
     public string LogsDir => Path.Combine(DataRoot, "logs");
     public string KeysDir => Path.Combine(DataRoot, "keys");
     public string CertificatesDir => Path.Combine(DataRoot, "certificates");
-    /// <summary>Root folder where each game server gets its own isolated sub-folder (step 2).</summary>
-    public string ServersDir => Path.Combine(DataRoot, "servers");
+    /// <summary>
+    /// Folder where each new game server gets its own isolated sub-folder. Chosen in the settings;
+    /// by default next to EAM's program (e.g. F:\EAM\servers) when EAM keeps its data in ProgramData,
+    /// otherwise inside the data folder.
+    /// </summary>
+    public string ServersDir { get; private set; }
+
+    /// <summary>True when the data folder is the machine-wide one (%ProgramData%), not a portable or forced folder.</summary>
+    public bool MachineWide { get; private init; }
+
+    /// <summary>Servers folder used when none is chosen in the settings.</summary>
+    public string DefaultServersDir
+    {
+        get
+        {
+            if (!MachineWide) return Path.Combine(DataRoot, "servers");
+            var exeDir = Path.GetFullPath(AppContext.BaseDirectory).TrimEnd('\\', '/');
+            foreach (var pf in new[] { Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolder.ProgramFilesX86 })
+            {
+                var dir = Environment.GetFolderPath(pf);
+                if (!string.IsNullOrEmpty(dir) && (exeDir + "\\").StartsWith(dir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+                    return Path.Combine(DataRoot, "servers");
+            }
+            return Path.Combine(exeDir, "servers");
+        }
+    }
+
+    /// <summary>Applies the folder chosen in the settings (empty = default).</summary>
+    public void UseServersFolder(string? configured)
+    {
+        ServersDir = string.IsNullOrWhiteSpace(configured) ? DefaultServersDir : Path.GetFullPath(configured.Trim());
+    }
     /// <summary>SteamCMD installation owned by EAM (step 2).</summary>
     public string SteamCmdDir => Path.Combine(DataRoot, "steamcmd");
 
     public EamPaths(string dataRoot)
     {
         DataRoot = Path.GetFullPath(dataRoot);
+        ServersDir = Path.Combine(DataRoot, "servers");
     }
 
     /// <summary>
@@ -43,12 +74,12 @@ public sealed class EamPaths
         var common = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
         if (string.IsNullOrEmpty(common))
             common = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
-        return new EamPaths(Path.Combine(common, AppInfo.ServiceName));
+        return new EamPaths(Path.Combine(common, AppInfo.ServiceName)) { MachineWide = true };
     }
 
     public void EnsureCreated()
     {
-        foreach (var dir in new[] { DataRoot, LogsDir, KeysDir, CertificatesDir, ServersDir })
+        foreach (var dir in new[] { DataRoot, LogsDir, KeysDir, CertificatesDir })
             Directory.CreateDirectory(dir);
     }
 }

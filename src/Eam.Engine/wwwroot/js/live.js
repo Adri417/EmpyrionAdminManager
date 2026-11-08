@@ -148,8 +148,12 @@ export async function renderChat(el, s, me) {
     const all = live.chat[s.id] || [];
     const msgs = shown();
     const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    const before = list.scrollTop;
     mount(list, msgs.length ? html`${msgs.map(line)}` : html`<div class="hint">${t(search ? "chat_no_match" : "chat_empty")}</div>`);
-    if (auto && (!keepScroll || atBottom)) list.scrollTop = list.scrollHeight;
+    // Newest messages at the bottom: follow them only when the reader is already at the bottom.
+    const toBottom = () => { list.scrollTop = list.scrollHeight; };
+    if (auto && (!keepScroll || atBottom)) { toBottom(); requestAnimationFrame(toBottom); }
+    else list.scrollTop = before;
     mount($("#chat-more-wrap", el), all.length >= 100 ? html`<button class="btn" id="chat-more">${t("chat_older")}</button>` : html``);
     $("#chat-more", el)?.addEventListener("click", async () => {
       try {

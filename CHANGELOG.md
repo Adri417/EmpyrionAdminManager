@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.13 (2026-11-08) - Dossier des serveurs au choix
+- Les nouveaux serveurs ne vont plus dans C:\ProgramData : par défaut à côté du programme EAM (ex. F:\EAM\servers), ou dans le dossier choisi dans Paramètres.
+- Import « copier » : choix du dossier de destination, taille à copier et place libre affichées, refus clair s'il manque de la place.
+- La mise à jour automatique ne touche jamais au dossier servers à côté du programme.
+- Chat, console et journaux : ne remontent plus tout en haut à chaque mise à jour en direct. Ils suivent les nouveaux messages seulement si on est déjà en bas.
+
 ## 0.9.12 (2026-11-08) - Import EAH fidèle
 - Tâches EAH : les listes de playfields séparées par « # » sont bien découpées, « all » = tous les playfields, chaque tâche garde son état (active ou non) comme dans EAH, deux tâches à la même heure ne fusionnent plus, les tâches mensuelles restent mensuelles.
 - Planificateur : nouveau rythme « Tous les mois ».

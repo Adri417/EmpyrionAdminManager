@@ -24,6 +24,7 @@ for (var i = 0; i < args.Length - 1; i++)
 var paths = EamPaths.Resolve(dataArg);
 paths.EnsureCreated();
 var config = EamConfig.Load(paths);
+paths.UseServersFolder(config.ServersFolder);
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
