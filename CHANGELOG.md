@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.16 (2026-11-08) - Correctif démarrage après import
+- Corrigé : une clé ajoutée par EAM dans dedicated.yaml (mot de passe telnet...) était décalée de 4 espaces quand le fichier en utilise 2. Empyrion ne pouvait plus lire le fichier et lançait une partie neuve. EAM reprend maintenant le décalage du fichier et répare une clé mal décalée.
+- Le mod de jeu d'EAH (EPF) est aussi mis de côté lors d'un import « copier », en plus de son plugin (EPM).
+
 ## 0.9.15 (2026-11-08) - Import « copier » plus sûr
 - Le dossier de sauvegarde (SaveDirectory) de l'ancien serveur est redirigé vers la copie : la copie ne joue jamais sur la sauvegarde de l'original.
 - Le plugin d'EAH copié avec le serveur est mis de côté (pas effacé), puisqu'EAM remplace EAH.

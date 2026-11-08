@@ -135,3 +135,49 @@ public class ConfigTests
         Assert.Throws<InvalidDataException>(cfg.Validate);
     }
 }
+
+public class YamlIndentTests
+{
+    [Fact]
+    public void NewAndCommentedKeysUseTheIndentationOfTheSection()
+    {
+        // Empyrion's own file: 2 spaces, Tel_Pwd only as a comment, Tel_Port missing.
+        var y = Eam.Core.Servers.DedicatedYaml.Parse("ServerConfig:\n  Srv_Port: 40000\n  # Tel_Pwd: x\nGameConfig:\n  GameName: RE2 S7\n");
+        y.Set("ServerConfig", "Tel_Pwd", "secret");
+        y.Set("ServerConfig", "Tel_Port", "40004");
+        var text = y.ToString();
+        Assert.Contains("\r\n  Tel_Pwd: secret\r\n", text);
+        Assert.Contains("\r\n  Tel_Port: 40004\r\n", text);
+        Assert.DoesNotContain("    Tel_", text);
+    }
+
+    [Fact]
+    public void AKeyWrittenWithTheWrongIndentationIsRepaired()
+    {
+        var y = Eam.Core.Servers.DedicatedYaml.Parse("ServerConfig:\n  Srv_Port: 40000\n    Tel_Pwd: old\n");
+        y.Set("ServerConfig", "Tel_Pwd", "new");
+        Assert.Contains("\r\n  Tel_Pwd: new", y.ToString());
+    }
+}
+
+public class EahModDetectionTests
+{
+    [Fact]
+    public void EahPluginAndGameModAreRecognised()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "eam-mods-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "EPM")); Directory.CreateDirectory(Path.Combine(root, "Other"));
+        Directory.CreateDirectory(Path.Combine(root, "Mine")); Directory.CreateDirectory(Path.Combine(root, "RescaBridge"));
+        File.WriteAllText(Path.Combine(root, "Mine", "Info.yaml"), "Name: EAH Mod\nAuthor: x\n");
+        File.WriteAllText(Path.Combine(root, "RescaBridge", "Info.yaml"), "Name: RescaBridge\n");
+        File.WriteAllText(Path.Combine(root, "Other", "EAH_Data.dll"), "");
+        try
+        {
+            Assert.True(Eam.Engine.Servers.ServerManager.IsEahMod(Path.Combine(root, "EPM")));
+            Assert.True(Eam.Engine.Servers.ServerManager.IsEahMod(Path.Combine(root, "Other")));
+            Assert.True(Eam.Engine.Servers.ServerManager.IsEahMod(Path.Combine(root, "Mine")));
+            Assert.False(Eam.Engine.Servers.ServerManager.IsEahMod(Path.Combine(root, "RescaBridge")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+}

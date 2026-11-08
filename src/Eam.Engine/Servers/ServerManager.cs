@@ -272,7 +272,7 @@ public sealed class ServerManager : BackgroundService
                     var mods = Path.Combine(def.GameDir, "Content", "Mods");
                     if (Directory.Exists(mods))
                         foreach (var mod in Directory.GetDirectories(mods))
-                            if (Directory.EnumerateFiles(mod, "EAH*.dll", SearchOption.AllDirectories).Any())
+                            if (IsEahMod(mod))
                             {
                                 var aside = Path.Combine(def.EamDir, "mods-set-aside", Path.GetFileName(mod));
                                 Directory.CreateDirectory(Path.GetDirectoryName(aside)!);
@@ -848,6 +848,19 @@ public sealed class ServerManager : BackgroundService
         if (allowNotInstalled && rt.State == ServerState.NotInstalled) return;
         if (rt.State == ServerState.NotInstalled) throw new ServerException("not_installed");
         throw new ServerException("server_must_be_stopped");
+    }
+
+    /// <summary>EAH's own mods: its plugin (EAH*.dll, folder EPM) and its game mod (folder EPF, "EAH Mod" in its info file).</summary>
+    internal static bool IsEahMod(string mod)
+    {
+        try
+        {
+            if (Path.GetFileName(mod) is "EPM" or "EPF") return true;
+            if (Directory.EnumerateFiles(mod, "EAH*.dll", SearchOption.AllDirectories).Any()) return true;
+            return Directory.EnumerateFiles(mod, "*.yaml", SearchOption.TopDirectoryOnly)
+                .Any(f => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(f), @"(?im)^\s*Name\s*:\s*.*\bEAH\b"));
+        }
+        catch { return false; }
     }
 
     /// <summary>A path inside <paramref name="from"/> moved to the same place inside <paramref name="to"/> (null when it is elsewhere).</summary>

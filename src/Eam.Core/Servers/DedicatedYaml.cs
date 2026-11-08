@@ -142,7 +142,7 @@ public sealed partial class DedicatedYaml
         if (i >= 0)
         {
             var commented = _lines[i].TrimStart().StartsWith('#');
-            var indent = commented ? "    " : Indent(_lines[i]);
+            var indent = SectionIndent(section); // also repairs a key written with the wrong indentation
             string? comment = null;
             if (!commented)
             {
@@ -161,7 +161,7 @@ public sealed partial class DedicatedYaml
             _lines.Add(section + ":");
             s = _lines.Count - 1;
         }
-        _lines.Insert(s + 1, $"    {key}: {rendered}".TrimEnd());
+        _lines.Insert(s + 1, $"{SectionIndent(section)}{key}: {rendered}".TrimEnd());
         return this;
     }
 
@@ -184,6 +184,24 @@ public sealed partial class DedicatedYaml
     }
 
     private static string Indent(string line) => line[..(line.Length - line.TrimStart().Length)];
+
+    /// <summary>
+    /// Indentation used by the active keys of a section (Empyrion's own files use 2 spaces, EAM's default 4).
+    /// A new or re-enabled key must use the same, or the game cannot read the file at all.
+    /// </summary>
+    private string SectionIndent(string section)
+    {
+        var s = FindSection(section);
+        if (s >= 0)
+            for (var i = s + 1; i < _lines.Count; i++)
+            {
+                var line = _lines[i];
+                if (line.Length > 0 && !char.IsWhiteSpace(line[0]) && line[0] != '#') break;
+                var m = KeyLine().Match(line);
+                if (m.Success && !m.Groups[2].Success && m.Groups[1].Value.Length > 0) return m.Groups[1].Value;
+            }
+        return "    ";
+    }
 
     private int FindSection(string section)
     {
