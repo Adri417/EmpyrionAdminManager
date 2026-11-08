@@ -606,7 +606,12 @@ public static class EahImporter
             var active = !string.Equals((string?)e.Attribute("AC"), "false", StringComparison.OrdinalIgnoreCase);
             var subs = e.Elements().Where(x => x.Name.LocalName == "TTS").Select(x => (string?)x.Attribute("A")).ToList();
             var backupFirst = subs.Any(a => a is "3" or "50" or "28");
-            List<string> Pfs() => EahReader.SplitList(p);
+            // EAH lists playfields separated by '#' ("Akua#Tallodar#"); "all" (or nothing) means every playfield.
+            List<string> Pfs()
+            {
+                var l = EahReader.SplitList(p);
+                return l.Count == 0 || l.Any(x => x.Equals("all", StringComparison.OrdinalIgnoreCase) || x == "*") ? ["*"] : l;
+            }
             (string Kind, object Params)? mapped = action switch
             {
                 0 or 7 when p.Length > 0 => ("message", new { text = p, mode = "chat" }),
@@ -618,10 +623,10 @@ public static class EahImporter
                 18 => ("shared_cleanup", new { }),
                 21 => ("limits", new { }),
                 24 => ("cleanup_players", new { days = 90 }),
-                31 => ("wipe", new { wipe = "all", playfields = Pfs().DefaultIfEmpty("*").ToList(), backupFirst = true }),
-                32 => ("wipe", new { wipe = "deposit", playfields = Pfs().DefaultIfEmpty("*").ToList() }),
-                36 => ("wipe", new { wipe = "poi", playfields = Pfs().DefaultIfEmpty("*").ToList() }),
-                38 => ("wipe", new { wipe = "terrain", playfields = Pfs().DefaultIfEmpty("*").ToList() }),
+                31 => ("wipe", new { wipe = "all", playfields = Pfs(), backupFirst = true }),
+                32 => ("wipe", new { wipe = "deposit", playfields = Pfs() }),
+                36 => ("wipe", new { wipe = "poi", playfields = Pfs() }),
+                38 => ("wipe", new { wipe = "terrain", playfields = Pfs() }),
                 _ => null,
             };
             if (mapped is null) continue;
@@ -631,8 +636,9 @@ public static class EahImporter
             object? schedule = repeat switch
             {
                 >= 1 and <= 15 => new { type = "interval", minutes = Math.Max(5, minutes[repeat]) },
-                16 or 24 => new { type = "daily", times = new[] { hhmm }, days = Array.Empty<int>() },
+                16 => new { type = "daily", times = new[] { hhmm }, days = Array.Empty<int>() },
                 >= 17 and <= 23 => new { type = "daily", times = new[] { hhmm }, days = new[] { (repeat - 16) % 7 } },
+                24 => new { type = "monthly", times = new[] { hhmm }, day = Math.Clamp((time ?? DateTime.Today).Day, 1, 28) },
                 _ => null,
             };
             if (schedule is null) continue;
@@ -643,16 +649,17 @@ public static class EahImporter
 
     private static void Tasks(ServerData data, string configDir, EahImportReport report)
     {
-        var existing = data.Tasks().Select(t => t.Kind + "|" + t.Schedule).ToHashSet();
+        var existing = data.Tasks().Select(t => t.Kind + "|" + t.Schedule + "|" + t.Params).ToHashSet();
         foreach (var t in TimeTable(configDir))
         {
             var schedule = JsonSerializer.Serialize(t.Schedule);
-            if (!existing.Add(t.Kind + "|" + schedule)) continue;
-            // Imported tasks start disabled: two tools must never restart or wipe the same server.
-            data.SaveTask(new ScheduledTask(0, t.Kind, false, schedule, JsonSerializer.Serialize(t.Params, Camel), null, "imported from EAH" + (t.Enabled ? "" : " (was off)")));
+            var pars = JsonSerializer.Serialize(t.Params, Camel);
+            if (!existing.Add(t.Kind + "|" + schedule + "|" + pars)) continue;
+            // Same state as in EAH (on or off).
+            data.SaveTask(new ScheduledTask(0, t.Kind, t.Enabled, schedule, pars, null, "imported from EAH" + (t.Enabled ? "" : " (was off)")));
             report.Add("tasks");
         }
-        if (report.Counts.GetValueOrDefault("tasks") > 0) report.Notes.Add("Imported tasks are switched off: check them, then switch them on once EAH is stopped.");
+        if (report.Counts.GetValueOrDefault("tasks") > 0) report.Notes.Add("Tasks keep their EAH state: stop EAH for this server so the two tools never restart or wipe it twice.");
     }
 
     public static string[] TemplateFiles(string configDir)

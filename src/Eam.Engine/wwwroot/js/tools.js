@@ -606,6 +606,7 @@ const KINDS = ["restart", "backup", "message", "command", "wipe", "stop", "start
 
 function describeSchedule(sc) {
   if (sc.type === "interval") return t("every_min", sc.minutes);
+  if (sc.type === "monthly") return t("sc_monthly_desc", sc.day, (sc.times || []).join(", "));
   const days = t("days_short").split(",");
   return `${(sc.times || []).join(", ")}${sc.days?.length ? ` · ${sc.days.map((d) => days[d]).join(" ")}` : ""}`;
 }
@@ -671,9 +672,11 @@ function taskDialog(s, x, done) {
   const dlg = dialog(x ? t("sc_edit") : t("sc_new"), html`
     <label>${t("sc_kind")}</label><select name="kind">${KINDS.map((k) => html`<option value="${k}" ${raw(k === (x?.kind ?? "restart") ? "selected" : "")}>${t("k_" + k)}</option>`)}</select>
     <label>${t("sc_when")}</label><select name="type"><option value="daily" ${raw(sc.type === "daily" ? "selected" : "")}>${t("sc_daily")}</option>
-      <option value="interval" ${raw(sc.type === "interval" ? "selected" : "")}>${t("sc_interval")}</option></select>
-    <div data-show="daily"><label>${t("sc_times")}</label><input name="times" value="${(sc.times || []).join(", ")}" placeholder="04:00, 16:00">
-      <label>${t("sc_days")}</label><div class="days">${days.map((d, i) => html`<label class="check inline"><input type="checkbox" name="day" value="${i}" ${raw(sc.days?.includes(i) ? "checked" : "")}> ${d}</label>`)}</div></div>
+      <option value="interval" ${raw(sc.type === "interval" ? "selected" : "")}>${t("sc_interval")}</option>
+      <option value="monthly" ${raw(sc.type === "monthly" ? "selected" : "")}>${t("sc_monthly")}</option></select>
+    <div data-show="daily monthly"><label>${t("sc_times")}</label><input name="times" value="${(sc.times || []).join(", ")}" placeholder="04:00, 16:00"></div>
+    <div data-show="monthly"><label>${t("sc_month_day")}</label><input name="monthDay" type="number" min="1" max="28" value="${sc.day || 1}"></div>
+    <div data-show="daily"><label>${t("sc_days")}</label><div class="days">${days.map((d, i) => html`<label class="check inline"><input type="checkbox" name="day" value="${i}" ${raw(sc.days?.includes(i) ? "checked" : "")}> ${d}</label>`)}</div></div>
     <div data-show="interval"><label>${t("sc_minutes")}</label><input name="minutes" type="number" min="5" value="${sc.minutes || 60}"></div>
     <div data-for="restart stop update"><label>${t("p_warn")}</label><input name="warn" type="number" min="0" max="60" value="${p.warnMinutes ?? 5}">
       <label>${t("p_message")}</label><input name="message" maxlength="120" value="${p.message ?? ""}" placeholder="Redémarrage du serveur / Server restart"></div>
@@ -696,6 +699,7 @@ function taskDialog(s, x, done) {
     const body = {
       kind: f.kind.value, enabled: f.enabled.checked,
       schedule: f.type.value === "interval" ? { type: "interval", minutes: +f.minutes.value }
+        : f.type.value === "monthly" ? { type: "monthly", times: f.times.value.split(",").map((v) => v.trim()).filter(Boolean), day: +f.monthDay.value }
         : { type: "daily", times: f.times.value.split(",").map((v) => v.trim()).filter(Boolean), days: $$("[name=day]", f).filter((c) => c.checked).map((c) => +c.value) },
       params: {
         warnMinutes: +f.warn.value, message: f.message.value || null, backupFirst: f.backupFirst.checked, text: f.text.value, mode: f.mode.value,
@@ -713,7 +717,7 @@ function taskDialog(s, x, done) {
   });
   const f = $("form", dlg);
   const sync = () => {
-    $$("[data-show]", f).forEach((d) => { d.hidden = d.dataset.show !== f.type.value; });
+    $$("[data-show]", f).forEach((d) => { d.hidden = !d.dataset.show.split(" ").includes(f.type.value); });
     $$("[data-for]", f).forEach((d) => { d.hidden = !d.dataset.for.split(" ").includes(f.kind.value); });
   };
   f.kind.addEventListener("change", sync);

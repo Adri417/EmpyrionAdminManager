@@ -70,3 +70,15 @@ public class ProxyPortTests
         c.Validate();
     }
 }
+
+public class MonthlyScheduleTests
+{
+    [Fact]
+    public void MonthlyRunsOnTheGivenDay()
+    {
+        var s = Schedule.Parse("{\"type\":\"monthly\",\"times\":[\"03:00\"],\"day\":15}");
+        Assert.Equal(new DateTime(2026, 11, 15, 3, 0, 0), s.NextAfter(new DateTime(2026, 11, 8, 2, 0, 0)));
+        Assert.Equal(new DateTime(2026, 12, 15, 3, 0, 0), s.NextAfter(new DateTime(2026, 11, 15, 3, 0, 0)));
+        Assert.Throws<FormatException>(() => Schedule.Parse("{\"type\":\"monthly\",\"times\":[\"03:00\"],\"day\":31}"));
+    }
+}

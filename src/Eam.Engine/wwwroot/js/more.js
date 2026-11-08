@@ -3,6 +3,9 @@ import { extend } from "./i18n.js";
 
 extend({
   fr: {
+    sc_monthly: "Tous les mois", sc_month_day: "Jour du mois (1 à 28)", sc_monthly_desc: "le {0} du mois à {1}", err_invalid_day: "Jour du mois : de 1 à 28.",
+    err_copy_skipped: "Copie terminée, mais Windows a refusé de laisser lire ces fichiers, qui n'ont pas été copiés", err_invalid_display_name: "Nom dans la liste du jeu invalide (100 caractères max).",
+    rn_display: "Nom dans la liste des serveurs du jeu", rn_display_hint: "Vide = le même que le nom EAM. Le nom EAM sert aussi de nom de dossier : gardez-le court (ex. RE2).",
     err_copy_failed: "La copie du serveur a échoué.", err_copy_access_denied: "EAM n'a pas le droit de lire ce fichier du serveur à copier (droits Windows). Donnez la lecture au compte qui fait tourner EAM, ou lancez EAM en administrateur.",
     proxy_title: "Derrière un serveur web (Apache, nginx, IIS)", proxy_port: "Port pour le serveur web (0 = coupé)", proxy_hint: "Si un serveur web de cette machine gère déjà HTTPS pour un domaine, mettez par exemple 8792 et faites-le renvoyer vers http://127.0.0.1:8792 (WebSocket compris). Ce port n'écoute que sur la machine. Redémarrage nécessaire.",
     err_import_source_running: "L'ancien serveur tourne encore. Arrêtez-le (saveandexit) et fermez EAH avant de le copier, sinon la copie de la sauvegarde serait abîmée.",
@@ -63,6 +66,9 @@ extend({
     err_scenario_delete_failed: "Le scénario n'a pas pu être supprimé.", err_server_running: "Arrêtez le serveur d'abord.", err_unknown_ore: "Minerai inconnu.",
   },
   en: {
+    sc_monthly: "Every month", sc_month_day: "Day of the month (1 to 28)", sc_monthly_desc: "day {0} of the month at {1}", err_invalid_day: "Day of the month: 1 to 28.",
+    err_copy_skipped: "Copy finished, but Windows did not let EAM read these files, which were not copied", err_invalid_display_name: "Invalid name for the game list (100 characters max).",
+    rn_display: "Name in the game's server list", rn_display_hint: "Empty = same as the EAM name. The EAM name is also the folder name: keep it short (e.g. RE2).",
     err_copy_failed: "Copying the server failed.", err_copy_access_denied: "EAM is not allowed to read this file of the server to copy (Windows permissions). Give read access to the account running EAM, or run EAM as administrator.",
     proxy_title: "Behind a web server (Apache, nginx, IIS)", proxy_port: "Port for the web server (0 = off)", proxy_hint: "If a web server on this machine already handles HTTPS for a domain, set e.g. 8792 and make it forward to http://127.0.0.1:8792 (WebSocket included). This port only listens on this machine. Restart needed.",
     err_import_source_running: "The old server is still running. Stop it (saveandexit) and close EAH before copying it, otherwise the copy of the save would be damaged.",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.12 (2026-11-08) - Import EAH fidèle
+- Tâches EAH : les listes de playfields séparées par « # » sont bien découpées, « all » = tous les playfields, chaque tâche garde son état (active ou non) comme dans EAH, deux tâches à la même heure ne fusionnent plus, les tâches mensuelles restent mensuelles.
+- Planificateur : nouveau rythme « Tous les mois ».
+- Nom du serveur : le nom EAM (qui sert aussi de nom de dossier, ex. RE2) est séparé du nom affiché dans la liste des serveurs du jeu. À l'import, ce nom est repris de la config du serveur.
+- Import « copier » : un fichier que Windows interdit de lire n'arrête plus la copie. Il est laissé de côté et listé clairement.
+
 ## 0.9.11 (2026-11-08) - Messages d'erreur clairs
 - Plus jamais « Une erreur est survenue » tout seul : EAM affiche la vraie cause (par exemple le fichier qui n'a pas pu être copié et pourquoi).
 - Import « copier » : message clair quand Windows interdit à EAM de lire un fichier du serveur à copier.

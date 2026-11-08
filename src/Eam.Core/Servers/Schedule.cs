@@ -15,6 +15,8 @@ public sealed class Schedule
     [JsonPropertyName("times")] public List<string> Times { get; set; } = [];
     [JsonPropertyName("days")] public List<int> Days { get; set; } = [];
     [JsonPropertyName("minutes")] public int Minutes { get; set; }
+    /// <summary>"monthly": day of the month (1-28).</summary>
+    [JsonPropertyName("day")] public int Day { get; set; }
 
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
@@ -35,7 +37,8 @@ public sealed class Schedule
             if (Minutes is < 5 or > 60 * 24 * 31) throw new FormatException("invalid_interval");
             return;
         }
-        if (Type != "daily") throw new FormatException("invalid_schedule");
+        if (Type == "monthly" && Day is < 1 or > 28) throw new FormatException("invalid_day");
+        if (Type is not ("daily" or "monthly")) throw new FormatException("invalid_schedule");
         if (Times.Count is 0 or > 48) throw new FormatException("invalid_times");
         foreach (var t in Times) _ = ParseTime(t);
         if (Days.Any(d => d is < 0 or > 6)) throw new FormatException("invalid_days");
@@ -52,6 +55,17 @@ public sealed class Schedule
     {
         if (Type == "interval") return afterLocal.AddMinutes(Minutes);
         var times = Times.Select(ParseTime).OrderBy(x => x).ToList();
+        if (Type == "monthly")
+        {
+            for (var m = 0; m <= 2; m++)
+            {
+                var month = new DateTime(afterLocal.Year, afterLocal.Month, 1).AddMonths(m);
+                var date = month.AddDays(Day - 1);
+                foreach (var t in times)
+                    if (date + t > afterLocal) return date + t;
+            }
+            return DateTime.MaxValue;
+        }
         for (var day = 0; day <= 8; day++)
         {
             var date = afterLocal.Date.AddDays(day);

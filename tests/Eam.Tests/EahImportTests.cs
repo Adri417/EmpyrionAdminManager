@@ -86,6 +86,9 @@ public class EahImportTests : IDisposable
               <TT W="16" A="5" P="" DZ="2026-01-01 04:00:00" AC="true"><TTS A="3"/></TT>
               <TT W="17" A="36" P="Akua,Omicron" DZ="2026-01-01 06:30:00" AC="true"/>
               <TT W="11" A="0" P="Vote for us!" AC="true"/>
+              <TT W="16" A="32" P="Akua#Tallodar#Rogue PX-37 Moon 2#" DZ="2026-01-01 04:55:00" AC="true"/>
+              <TT W="16" A="31" P="all" DZ="2026-01-01 04:55:00" AC="false"/>
+              <TT W="24" A="50" P="" DZ="2026-01-15 03:00:00" AC="true"/>
               <TT W="16" A="47" P="cmd.exe" AC="true"/>
             </Body></DataStore>
             """, Encoding.Unicode);
@@ -129,7 +132,7 @@ public class EahImportTests : IDisposable
         var preview = EahImporter.Preview(Config, Path.Combine(_root, "work1"));
         Assert.Equal(2, preview.Counts["players"]);
         Assert.Equal(1, preview.Counts["backpacks"]);
-        Assert.Equal(3, preview.Counts["tasks"]);
+        Assert.Equal(6, preview.Counts["tasks"]);
 
         var report = EahImporter.Import(data, Config, Path.Combine(_root, "work2"), new EahImportOptions());
         Assert.False(Directory.Exists(Path.Combine(_root, "work2")));
@@ -176,12 +179,21 @@ public class EahImportTests : IDisposable
         Assert.True(FeatureStore.Load<GameplaySettings>(data, "gameplay").AutominerEnabled);
 
         var tasks = data.Tasks();
-        Assert.Equal(3, tasks.Count);
-        Assert.All(tasks, t => Assert.False(t.Enabled));
+        Assert.Equal(6, tasks.Count);
+        // Same on/off state as in EAH.
+        Assert.Equal(5, tasks.Count(t => t.Enabled));
+        // '#'-separated playfields are split; two wipes at the same time stay two tasks; "all" = every playfield.
+        var deposit = tasks.Single(t => t.Params.Contains("\"deposit\""));
+        Assert.Contains("[\"Akua\",\"Tallodar\",\"Rogue PX-37 Moon 2\"]", deposit.Params);
+        var all = tasks.Single(t => t.Params.Contains("\"wipe\":\"all\""));
+        Assert.Contains("[\"*\"]", all.Params);
+        Assert.False(all.Enabled);
+        // Monthly stays monthly.
+        Assert.Contains("\"monthly\"", tasks.Single(t => t.Kind == "backup").Schedule);
         var restart = tasks.Single(t => t.Kind == "restart");
         Assert.Contains("\"backupFirst\":true", restart.Params);
         Assert.Contains("04:00", restart.Schedule);
-        var wipe = tasks.Single(t => t.Kind == "wipe");
+        var wipe = tasks.Single(t => t.Kind == "wipe" && t.Params.Contains("\"poi\""));
         Assert.Contains("Omicron", wipe.Params);
         Assert.Contains("\"days\":[1]", wipe.Schedule);
         Assert.Contains("\"minutes\":120", tasks.Single(t => t.Kind == "message").Schedule);
@@ -191,6 +203,6 @@ public class EahImportTests : IDisposable
 
         // A second import does not duplicate the tasks.
         EahImporter.Import(data, Config, Path.Combine(_root, "work3"), new EahImportOptions { Chat = false, History = false, Inventories = false });
-        Assert.Equal(3, data.Tasks().Count);
+        Assert.Equal(6, data.Tasks().Count);
     }
 }

@@ -10,6 +10,10 @@ public sealed record ServerDefinition
     public required string Name { get; init; }
     /// <summary>servers\&lt;slug&gt;: contains game\ (the Empyrion installation) and eam\ (EAM's own files for this server).</summary>
     public required string RootDir { get; init; }
+    /// <summary>Name shown in the game's server list when it differs from <see cref="Name"/> (which also names the folder). Null = same as Name.</summary>
+    public string? DisplayName { get; init; }
+    /// <summary>Name given to the game (Srv_Name).</summary>
+    public string ListName => string.IsNullOrWhiteSpace(DisplayName) ? Name : DisplayName;
     /// <summary>First game port. Empyrion uses this port and the 3 following ones.</summary>
     public required int GamePort { get; init; }
     public required int TelnetPort { get; init; }

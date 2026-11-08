@@ -72,7 +72,9 @@ export function importDialog(servers) {
         <label class="check"><input type="radio" name="mode" value="inplace"> ${t("imp_inplace")}</label>` : ""}
       ${p.configDir && servers.length ? html`<label class="check"><input type="radio" name="mode" value="existing" ${raw(!p.gameDir || p.existingServerId ? "checked" : "")}> ${t("imp_existing")}</label>
         <select name="server">${servers.map((s) => html`<option value="${s.id}" ${raw(s.id === p.existingServerId ? "selected" : "")}>${s.name}</option>`)}</select>` : ""}
-      <div data-new><label>${t("imp_name")}</label><input name="name" maxlength="60" value="${p.name || p.eah?.serverName || ""}"></div>
+      <div data-new><label>${t("imp_name")}</label><input name="name" maxlength="60" value="${p.name || p.eah?.serverName || ""}">
+        <label>${t("rn_display")}</label><input name="displayName" maxlength="100" value="${p.name || p.eah?.serverName || ""}">
+        <div class="hint">${t("rn_display_hint")}</div></div>
       ${p.configDir ? html`<details><summary>${t("imp_what")}</summary>
         ${[["players", "imp_o_players"], ["chat", "imp_o_chat"], ["history", "imp_o_history"], ["inventories", "imp_o_inv"], ["structures", "imp_o_structures"],
           ["statistics", "imp_o_stats"], ["settings", "imp_o_settings"], ["tasks", "imp_o_tasks"], ["templates", "imp_o_templates"]]
@@ -99,7 +101,7 @@ export function importDialog(servers) {
     btn.textContent = t("imp_running");
     try {
       const r = await api.post("/api/import", {
-        path: f.path.value, mode, serverId: mode === "existing" ? +f.server.value : null, name: f.name?.value || null,
+        path: f.path.value, mode, serverId: mode === "existing" ? +f.server.value : null, name: f.name?.value || null, displayName: f.displayName?.value || null,
         options: { players: opt("players"), chat: opt("chat"), history: opt("history"), inventories: opt("inventories"), structures: opt("structures"),
           statistics: opt("statistics"), settings: opt("settings"), tasks: opt("tasks"), templates: opt("templates"), inventoryDays: +(f.invDays?.value || 30) },
       });

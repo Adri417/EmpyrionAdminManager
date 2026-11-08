@@ -428,7 +428,7 @@ public static class EahReader
 
     /// <summary>Splits a list typed in EAH (one per line, or separated by commas or semicolons).</summary>
     public static List<string> SplitList(string? value) =>
-        (value ?? "").Split(['\r', '\n', ',', ';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        (value ?? "").Split(['\r', '\n', ',', ';', '|', '#'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(s => s.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>An EAH inventory template (Inventory Templates\&lt;name&gt;.xml): &lt;Inv P=slot ID=item M=count A=ammo H=decay/&gt;.</summary>

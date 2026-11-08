@@ -63,7 +63,7 @@ public sealed class ServerManager : BackgroundService
         string? yamlValue(string key) => yaml?.Get("ServerConfig", key);
         return new
         {
-            id = s.Id, slug = s.Slug, name = s.Name, rootDir = s.RootDir, gamePort = s.GamePort, telnetPort = s.TelnetPort, modPort = s.ModPort,
+            id = s.Id, slug = s.Slug, name = s.Name, displayName = s.DisplayName, listName = s.ListName, rootDir = s.RootDir, gamePort = s.GamePort, telnetPort = s.TelnetPort, modPort = s.ModPort,
             branch = s.Branch, autoStart = s.AutoStart, autoRestart = s.AutoRestart, installed = s.Installed, buildId = s.BuildId,
             latestBuild = _steam.LatestBuilds.GetValueOrDefault(s.Branch),
             gameUpdateAvailable = s.Installed && s.BuildId is { Length: > 0 } b0 && _steam.LatestBuilds.TryGetValue(s.Branch, out var lb) && lb != b0
@@ -192,7 +192,7 @@ public sealed class ServerManager : BackgroundService
     /// copy = true copies the whole folder into EAM's servers folder (the original is not touched);
     /// copy = false uses the folder in place. Ports, telnet password and options come from its dedicated yaml.
     /// </summary>
-    public async Task<ServerDefinition> AdoptAsync(string? name, string gameDir, string? yamlName, bool copy, string by)
+    public async Task<ServerDefinition> AdoptAsync(string? name, string gameDir, string? yamlName, bool copy, string by, string? displayName = null)
     {
         gameDir = Path.GetFullPath((gameDir ?? "").Trim().Trim('"'));
         if (!Directory.Exists(gameDir)) throw new ServerException("not_found", gameDir);
@@ -202,7 +202,10 @@ public sealed class ServerManager : BackgroundService
             .Where(n => !string.IsNullOrWhiteSpace(n) && n!.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
             .Select(n => Path.Combine(gameDir, n!)).FirstOrDefault(File.Exists);
         var yaml = yamlFile is null ? DedicatedYaml.Default() : DedicatedYaml.Load(yamlFile);
-        var cleanName = CleanName(string.IsNullOrWhiteSpace(name) ? yaml.Get("ServerConfig", "Srv_Name") ?? "Imported server" : name);
+        var listName = yaml.Get("ServerConfig", "Srv_Name");
+        var cleanName = CleanName(string.IsNullOrWhiteSpace(name) ? listName ?? "Imported server" : name);
+        // The name in the game list stays the one of the imported server unless another one is given.
+        var cleanDisplay = CleanDisplayName(string.IsNullOrWhiteSpace(displayName) ? listName : displayName, cleanName);
         if (copy)
         {
             // Copying a save while the game writes it would give a broken copy: the old server must be stopped first.
@@ -228,7 +231,7 @@ public sealed class ServerManager : BackgroundService
             Directory.CreateDirectory(root);
             var def = _store.Add(new ServerDefinition
             {
-                Slug = slug, Name = cleanName, RootDir = root, GamePort = gamePort, TelnetPort = telnetPort, TelnetPassword = telnetPwd,
+                Slug = slug, Name = cleanName, DisplayName = cleanDisplay, RootDir = root, GamePort = gamePort, TelnetPort = telnetPort, TelnetPassword = telnetPwd,
                 Branch = "public", AutoStart = false, AutoRestart = true, ModKey = NewModKey(), Installed = !copy,
                 GameDirOverride = copy ? null : gameDir,
             });
@@ -251,12 +254,17 @@ public sealed class ServerManager : BackgroundService
             {
                 try
                 {
-                    await Task.Run(() => CopyTree(gameDir, def.GameDir, rt));
+                    var skipped = await Task.Run(() => CopyTree(gameDir, def.GameDir, rt));
                     ApplyManagedKeys(yaml, def);
                     yaml.Save(def.YamlFile);
                     _store.Update(def with { Installed = true });
                     rt.State = ServerState.Stopped;
                     ServerLog(def, "Copy finished");
+                    if (skipped.Count > 0)
+                    {
+                        ServerLog(def, "Not copied (Windows refused to read them): " + string.Join(", ", skipped));
+                        rt.LastError = $"copy_skipped: {string.Join(", ", skipped.Take(5))}{(skipped.Count > 5 ? $" (+{skipped.Count - 5})" : "")}";
+                    }
                 }
                 catch (Exception e)
                 {
@@ -276,8 +284,10 @@ public sealed class ServerManager : BackgroundService
         finally { CreateGate.Release(); }
     }
 
-    private void CopyTree(string from, string to, ServerRuntime rt)
+    /// <summary>Copies a whole server folder. Files Windows does not let EAM read are left out and returned.</summary>
+    private List<string> CopyTree(string from, string to, ServerRuntime rt)
     {
+        var skipped = new List<string>();
         var files = new DirectoryInfo(from).EnumerateFiles("*", SearchOption.AllDirectories).ToList();
         var total = Math.Max(1, files.Sum(f => f.Length));
         long done = 0;
@@ -288,24 +298,26 @@ public sealed class ServerManager : BackgroundService
             var target = Path.Combine(to, rel);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             try { f.CopyTo(target, overwrite: true); }
-            catch (UnauthorizedAccessException) { throw new ServerException("copy_access_denied", rel); }
+            catch (UnauthorizedAccessException) { skipped.Add(rel); }
             catch (IOException e) { throw new ServerException("copy_failed", $"{rel}: {e.Message}"); }
             done += f.Length;
             rt.Progress = Math.Round(done * 100.0 / total, 1);
             if (DateTime.UtcNow - lastPush > TimeSpan.FromSeconds(1)) { lastPush = DateTime.UtcNow; _ = BroadcastListAsync(); }
         }
+        return skipped;
     }
 
-    public async Task RenameAsync(long id, string newName, string by)
+    public async Task RenameAsync(long id, string newName, string by, string? displayName = null)
     {
         var name = CleanName(newName);
+        var display = CleanDisplayName(displayName, name);
         await WithLock(id, "rename", async (def, rt) =>
         {
             RequireStopped(rt, allowNotInstalled: true);
             var all = _store.List().Where(s => s.Id != id).ToList();
             if (all.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))) throw new ServerException("name_taken");
             var slug = Slug.From(name);
-            var updated = def with { Name = name };
+            var updated = def with { Name = name, DisplayName = display };
             if (!string.Equals(slug, def.Slug, StringComparison.OrdinalIgnoreCase))
             {
                 slug = UniqueSlug(slug, all);
@@ -317,9 +329,9 @@ public sealed class ServerManager : BackgroundService
                     updated = updated with { Slug = slug, RootDir = newRoot };
                 }
             }
-            if (File.Exists(updated.YamlFile)) DedicatedYaml.Load(updated.YamlFile).Set("ServerConfig", "Srv_Name", name).Save(updated.YamlFile);
+            if (File.Exists(updated.YamlFile)) DedicatedYaml.Load(updated.YamlFile).Set("ServerConfig", "Srv_Name", updated.ListName).Save(updated.YamlFile);
             _store.Update(updated);
-            ServerLog(updated, $"Renamed by {by}: '{def.Name}' -> '{name}' (folder {updated.RootDir})");
+            ServerLog(updated, $"Renamed by {by}: '{def.Name}' -> '{name}' (folder {updated.RootDir}, name in the game list '{updated.ListName}')");
             await Task.CompletedTask;
         });
     }
@@ -484,7 +496,7 @@ public sealed class ServerManager : BackgroundService
 
     public static void ApplyManagedKeys(DedicatedYaml y, ServerDefinition def)
     {
-        y.Set("ServerConfig", "Srv_Name", def.Name);
+        y.Set("ServerConfig", "Srv_Name", def.ListName);
         y.Set("ServerConfig", "Srv_Port", def.GamePort.ToString());
         y.Set("ServerConfig", "Tel_Enabled", "true");
         y.Set("ServerConfig", "Tel_Port", def.TelnetPort.ToString());
@@ -835,6 +847,15 @@ public sealed class ServerManager : BackgroundService
         var candidate = slug;
         for (var i = 2; taken.Contains(candidate); i++) candidate = $"{slug}-{i}";
         return candidate;
+    }
+
+    /// <summary>Name in the game's server list: null when empty or equal to the EAM name.</summary>
+    private static string? CleanDisplayName(string? display, string name)
+    {
+        display = (display ?? "").Trim();
+        if (display.Length == 0 || display == name) return null;
+        if (display.Length > 100 || display.Any(char.IsControl)) throw new ServerException("invalid_display_name");
+        return display;
     }
 
     private static string CleanName(string? name)

@@ -3,7 +3,7 @@ using Eam.Engine.Servers;
 
 namespace Eam.Engine.Api;
 
-public sealed record RenameRequest(string Name);
+public sealed record RenameRequest(string Name, string? DisplayName = null);
 public sealed record StopRequest(int DelayMinutes, string? Message);
 public sealed record DeleteServerRequest(bool DeleteFiles, string ConfirmName);
 public sealed record ConsoleRequest(string Command);
@@ -23,7 +23,7 @@ public static class ServerEndpoints
             Run(async () => m.Describe(await m.CreateAsync(req, By(c))))).RequireAuthorization(Roles.Owner);
 
         g.MapPost("/{id:long}/rename", (long id, RenameRequest req, ServerManager m, HttpContext c) =>
-            Run(async () => { await m.RenameAsync(id, req.Name, By(c)); return Ok; })).RequireAuthorization(Roles.Owner);
+            Run(async () => { await m.RenameAsync(id, req.Name, By(c), req.DisplayName); return Ok; })).RequireAuthorization(Roles.Owner);
 
         g.MapPut("/{id:long}/settings", (long id, ServerSettingsRequest req, ServerManager m, HttpContext c) =>
             Run(async () => new { appliesOnRestart = await m.UpdateSettingsAsync(id, req, By(c)) })).RequireAuthorization(Roles.Admin);

@@ -124,6 +124,10 @@ public sealed class Database
         """
         ALTER TABLE servers ADD COLUMN game_dir TEXT NULL;
         """,
+        // 5: name shown in the game's server list, when different from the EAM name (folder)
+        """
+        ALTER TABLE servers ADD COLUMN display_name TEXT NULL;
+        """,
     ];
 
     public void Migrate()

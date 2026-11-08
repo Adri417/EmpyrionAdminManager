@@ -154,7 +154,7 @@ export async function renderServerList(page) {
         ? html`<div class="card"><div class="empty"><div class="big">▣</div><b>${t("servers_empty_title")}</b><div>${t("no_server_yet")}</div></div></div>`
         : html`<div class="grid servers">${store.servers.map((s) => html`
           <a class="card server-card" href="#/server/${s.id}">
-            <div class="server-head"><b>${s.name}</b>${stateBadge(s)}</div>
+            <div class="server-head"><b>${s.name}</b>${stateBadge(s)}</div>${s.displayName ? html`<div class="hint">${s.displayName}</div>` : ""}
             <div class="hint">${t("ports")} ${s.gamePort}-${s.gamePort + 3} · ${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}${s.state === "Running" && playerCount(s.id) != null ? ` · ${playerCount(s.id)} ${t("col_players").toLowerCase()}` : ""}</div>
             ${progressBar(s)}
             ${s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
@@ -411,6 +411,8 @@ function renameDialog(s) {
   mount(dlg, html`<form method="dialog" id="rd">
     <h3>${t("rename_title")}</h3>
     <label>${t("srv_name")}</label><input name="name" type="text" minlength="2" maxlength="60" required value="${s.name}">
+    <label>${t("rn_display")}</label><input name="displayName" type="text" maxlength="100" value="${s.displayName || ""}" placeholder="${s.name}">
+    <div class="hint">${t("rn_display_hint")}</div>
     <div class="hint">${t("rename_hint")}</div><div class="error" id="rerr"></div>
     <div class="dialog-actions"><button class="btn" value="cancel" formnovalidate>${t("cancel")}</button>
       <button class="btn primary" value="ok">${t("save")}</button></div></form>`);
@@ -419,7 +421,7 @@ function renameDialog(s) {
   f.addEventListener("submit", async (e) => {
     if (e.submitter?.value === "cancel") { dlg.close(); return; }
     e.preventDefault();
-    try { await api.post(`/api/servers/${s.id}/rename`, { name: f.name.value }); dlg.close(); await loadServers(); }
+    try { await api.post(`/api/servers/${s.id}/rename`, { name: f.name.value, displayName: f.displayName.value }); dlg.close(); await loadServers(); }
     catch (ex) { $("#rerr", dlg).textContent = errorText(ex.code); }
   });
   dlg.addEventListener("close", () => dlg.remove());
