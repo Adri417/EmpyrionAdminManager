@@ -109,6 +109,7 @@ builder.Services.AddSingleton(certificates);
 builder.Services.AddSingleton<LetsEncryptService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LetsEncryptService>());
 builder.Services.AddHostedService<GameUpdateWatcher>();
+builder.Services.AddHostedService<AnnouncementService>();
 builder.Services.AddSingleton<UpdateService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<UpdateService>());
 var letsEncrypt = config.RemoteAccess.Enabled && config.RemoteAccess.LetsEncrypt.Enabled ? config.RemoteAccess.LetsEncrypt : null;

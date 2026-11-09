@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.23 (2026-11-09) - Annonces automatiques
+- Nouvel onglet « Annonces » (administrateurs) : une liste de messages envoyés en jeu à tour de rôle, un toutes les N minutes (1 à 1440), puis retour au premier. Affichage au choix : chat, fenêtre à l'écran ou alerte rouge. Option pour n'annoncer que lorsque des joueurs sont connectés.
+
 ## 0.9.22 (2026-11-08) - Messages en double
 - Corrigé : les messages d'EAM dans le chat (arrivées/départs, messages programmés, chat depuis EAM, compte à rebours) s'affichaient 2 fois en jeu. La commande console « say » est affichée deux fois par le jeu : le mod EAM écrit maintenant dans le chat par l'API de chat du jeu (une seule ligne). Repli sur « say » si cette API n'est pas disponible.
 - Le mod EAM est mis à jour au prochain démarrage de chaque serveur.

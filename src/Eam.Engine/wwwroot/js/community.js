@@ -6,6 +6,11 @@ import { atLeast, fail, when, dialog, settingsForm } from "./ui.js";
 
 extend({
   fr: {
+    tab_announcements: "Annonces", an_title: "Annonces automatiques",
+    an_hint: "Toutes les N minutes, EAM envoie en jeu le message suivant de la liste, puis le suivant, et revient au premier à la fin.",
+    an_on: "Activer les annonces", an_minutes: "Fréquence (minutes)", an_mode: "Affichage", an_mode_chat: "Chat",
+    an_mode_popup: "Fenêtre à l'écran", an_mode_alert: "Alerte rouge (avec alarme)", an_only_players: "Seulement quand des joueurs sont connectés",
+    an_list: "Messages (dans l'ordre)", an_text: "Message", err_invalid_announcement: "Annonce vide ou trop longue (300 caractères max), ou fréquence hors de 1 à 1440 minutes.",
     tab_community: "Communauté", cm_moderation: "Modération", cm_mutes: "Joueurs muets", cm_warnings: "Avertissements du filtre", cm_none: "Personne.",
     cm_mute: "Rendre muet", cm_unmute: "Fin du muet", cm_reset: "Effacer", cm_minutes: "Durée (minutes)", cm_player: "Joueur",
     cm_until: "Jusqu'à", cm_mute_hint: "Le jeu ne permet pas de bloquer le chat d'un joueur : EAM l'avertit à chaque message, puis l'expulse s'il continue.",
@@ -31,6 +36,11 @@ extend({
     err_invalid_language: "Langue invalide.", err_invalid_discord_channel: "Numéro de salon invalide.", err_network_error: "Connexion impossible.",
   },
   en: {
+    tab_announcements: "Announcements", an_title: "Automatic announcements",
+    an_hint: "Every N minutes, EAM sends the next message of the list in game, then the next one, and starts again at the end.",
+    an_on: "Enable announcements", an_minutes: "Frequency (minutes)", an_mode: "Display", an_mode_chat: "Chat",
+    an_mode_popup: "Message box", an_mode_alert: "Red alert (with alarm)", an_only_players: "Only when players are online",
+    an_list: "Messages (in order)", an_text: "Message", err_invalid_announcement: "Empty or too long announcement (300 characters max), or frequency outside 1 to 1440 minutes.",
     tab_community: "Community", cm_moderation: "Moderation", cm_mutes: "Muted players", cm_warnings: "Filter warnings", cm_none: "Nobody.",
     cm_mute: "Mute", cm_unmute: "Unmute", cm_reset: "Clear", cm_minutes: "Duration (minutes)", cm_player: "Player",
     cm_until: "Until", cm_mute_hint: "The game cannot block a player's chat: EAM warns them at every message, then kicks them if they go on.",
@@ -57,7 +67,7 @@ extend({
   },
 });
 
-export const communityTabs = (role) => (atLeast(role, "moderator") ? ["community"] : []);
+export const communityTabs = (role) => (atLeast(role, "admin") ? ["community", "announcements"] : atLeast(role, "moderator") ? ["community"] : []);
 
 let audio;
 function beep() {
@@ -83,6 +93,18 @@ export function communityEvent(msg) {
 }
 
 export async function renderCommunity(tab, el, s, me) {
+  if (tab === "announcements") {
+    mount(el, html`<div id="an-form"></div>`);
+    await settingsForm($("#an-form", el), `/api/servers/${s.id}/features/community`, [
+      { title: t("an_title"), hint: t("an_hint"), fields: [
+        { k: "announcementsEnabled", type: "check", label: t("an_on") },
+        { k: "announcementMinutes", type: "number", label: t("an_minutes") },
+        { k: "announcementMode", type: "select", label: t("an_mode"), options: [["chat", t("an_mode_chat")], ["popup", t("an_mode_popup")], ["alert", t("an_mode_alert")]] },
+        { k: "announcementsOnlyWithPlayers", type: "check", label: t("an_only_players") },
+        { k: "announcements", type: "rows", label: t("an_list"), cols: [{ k: "text", label: t("an_text"), type: "text" }] }] },
+    ]);
+    return;
+  }
   mount(el, html`<div class="card" id="cm-mod"></div><div id="cm-form"></div>`);
   await moderation($("#cm-mod", el), s);
   if (!atLeast(me.role, "admin")) return;

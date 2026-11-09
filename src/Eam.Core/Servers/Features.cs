@@ -178,6 +178,11 @@ public sealed class KitItem
     public int Count { get; set; } = 1;
 }
 
+public sealed class Announcement
+{
+    public string Text { get; set; } = "";
+}
+
 public sealed class PlayfieldMessage
 {
     public string Playfield { get; set; } = "";
@@ -231,6 +236,14 @@ public sealed class CommunitySettings : IFeatureSettings
     public bool ShowAdminName { get; set; } = true;
     public List<PlayfieldMessage> PlayfieldMessages { get; set; } = [];
 
+    /// <summary>Automatic announcements: one message of the list every N minutes, in turn.</summary>
+    public bool AnnouncementsEnabled { get; set; }
+    public int AnnouncementMinutes { get; set; } = 15;
+    /// <summary>"chat", "popup" or "alert".</summary>
+    public string AnnouncementMode { get; set; } = "chat";
+    public bool AnnouncementsOnlyWithPlayers { get; set; } = true;
+    public List<Announcement> Announcements { get; set; } = [];
+
     public string TranslateTo { get; set; } = "fr";
 
     public bool DiscordEnabled { get; set; }
@@ -248,6 +261,8 @@ public sealed class CommunitySettings : IFeatureSettings
         FeatureStore.Need(SurvivalKit.All(k => k.Id > 0 && k.Count is > 0 and <= 100000) && SurvivalCredits is >= 0 and <= 100_000_000, "invalid_kit");
         FeatureStore.Need(FilterWarnings is >= 0 and <= 20 && FilterFirstBanMinutes is >= 1 and <= 60 * 24 * 30 && MutedKickAfter is >= 0 and <= 100, "invalid_filter");
         FeatureStore.Need(JoinMessage.Length <= 200 && LeaveMessage.Length <= 200, "invalid_message");
+        FeatureStore.Need(AnnouncementMinutes is >= 1 and <= 1440 && AnnouncementMode is "chat" or "popup" or "alert"
+            && Announcements.All(a => a.Text.Trim().Length is > 0 and <= 300), "invalid_announcement");
         FeatureStore.Need(Motd.Length <= 500 && Welcome.Length <= 500 && PlayfieldMessages.All(p => p.Playfield.Length > 0 && p.Text.Length is > 0 and <= 300), "invalid_message");
         FeatureStore.Need(Regex.IsMatch(TranslateTo, "^[a-z]{2}(-[A-Za-z]{2})?$"), "invalid_language");
         bool Snowflake(string s) => s.Length == 0 || Regex.IsMatch(s, "^[0-9]{15,22}$");
