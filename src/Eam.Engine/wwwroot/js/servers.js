@@ -223,37 +223,37 @@ export async function renderServerDetail(page, id, setTitle) {
   const admin = atLeast(store.me.role, "admin");
   const owner = atLeast(store.me.role, "owner");
 
-  const shell = (kept = null) => {
-    const s = get();
-    if (!s) { location.hash = "#/servers"; return; }
+  const head = (s) => {
     setTitle(s.name);
     // Name (title), state and actions live in the top bar: one line, no duplicate header.
     const top = $("#top-extra");
     if (top) mount(top, html`${stateBadge(s)}<div class="actions-row top-actions" id="actions"></div>`);
+    drawActions(s);
     const notice = s.progress != null || s.autoRestartSuspended || s.lastError;
-    // Rebuilding the page resets every scroll position (chat, console, logs, and the page itself): remember them
-    // BEFORE the old content leaves the page (a detached element always reads 0) and put them back afterwards.
-    const ancestors = [];
-    for (let x = page; x; x = x.parentElement) ancestors.push(x);
-    if (document.scrollingElement) ancestors.push(document.scrollingElement);
-    const scrolled = [...ancestors, ...(kept ? [kept, ...kept.querySelectorAll("*")] : [])]
-      .filter((x) => x.scrollTop > 0).map((x) => [x, x.scrollTop]);
-    mount(page, html`
-      ${notice ? html`<div class="card server-top">
+    const box = $("#srv-notice", page);
+    if (box) mount(box, notice ? html`<div class="card server-top">
         ${progressBar(s)}
         ${s.autoRestartSuspended ? html`<div class="error">${t("crash_loop")}</div>` : s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
-      </div>` : ""}
+      </div>` : html``);
+    applyBars(page);
+  };
+
+  const shell = (kept = null) => {
+    const s = get();
+    if (!s) { location.hash = "#/servers"; return; }
+    if (kept && kept.isConnected && $("#srv-notice", page)) {
+      // Live update: only the top bar and the notice change. The open tab stays exactly as it is
+      // (no rebuild: the field being typed in keeps the focus, lists keep their scroll position).
+      head(s);
+      return;
+    }
+    mount(page, html`<div id="srv-notice"></div>
       <nav class="tabs">${["overview", "chat", ...toolTabs(store.me.role), ...featureTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
-    applyBars(page);
-    drawActions(s);
+    head(s);
     $$(".tabs button", page).forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; shell(); }));
-    if (kept) {
-      $("#tab", page).replaceWith(kept);
-    }
-    else drawTab(s);
-    scrolled.forEach(([x, top]) => { x.scrollTop = top; });
+    drawTab(s);
   };
 
   const drawActions = (s) => {

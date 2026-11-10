@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.24 (2026-11-10) - On reste dans le champ de texte
+- Corrigé : pendant qu'un serveur tourne, chaque mise à jour en direct faisait sortir du champ de texte en cours de saisie (annonces, réglages, chat, console...). Les mises à jour en direct ne changent plus que la barre du haut et l'avertissement ; l'onglet ouvert n'est plus touché (champ, défilement et listes déroulantes restent comme ils sont).
+
 ## 0.9.23 (2026-11-09) - Annonces automatiques
 - Nouvel onglet « Annonces » (administrateurs) : une liste de messages envoyés en jeu à tour de rôle, un toutes les N minutes (1 à 1440), puis retour au premier. Affichage au choix : chat, fenêtre à l'écran ou alerte rouge. Option pour n'annoncer que lorsque des joueurs sont connectés.
 
