@@ -457,16 +457,48 @@ async function renderPlayer(el, s, me, steamId, back) {
     survival: () => act("survival_reset").catch(fail),
     playtime: () => act("playtime_reset").catch(fail),
     tp_more: async () => {
-      let positions = [];
+      let positions = [], players = [];
       try { positions = await api.get(`/api/servers/${s.id}/positions`); } catch { }
-      dialog(t("pm_tp_more"), html`<label>${t("pm_tp_kind")}</label><select name="k">
-          <option value="pos">${t("pm_tp_pos")}</option><option value="player">${t("pm_tp_player")}</option><option value="structure">${t("pm_tp_structure")}</option></select>
-        <label>${t("pm_tp_pos")}</label><select name="pos">${positions.map((x) => html`<option>${x.name}</option>`)}</select>
-        <label>${t("pm_tp_target")}</label><input name="target" placeholder="SteamID / ${t("pm_tp_structure")} #">
+      try { players = (await api.get(`/api/servers/${s.id}/players`)).filter((x) => x.online && x.steamId && x.steamId !== steamId); } catch { }
+      players.sort((a, b) => a.name.localeCompare(b.name));
+      const dlg = dialog(t("pm_tp_more"), html`<label>${t("pm_tp_kind")}</label><select name="k">
+          <option value="player">${t("pm_tp_player")}</option><option value="pos">${t("pm_tp_pos")}</option><option value="structure">${t("pm_tp_structure")}</option></select>
+        <div data-k="player"><label>${t("pm_tp_player")}</label>${players.length
+          ? html`<select name="tplayer">${players.map((x) => html`<option value="${x.steamId}">${x.name}${x.playfield ? " · " + x.playfield : ""}</option>`)}</select>`
+          : html`<div class="hint">${t("pm_tp_nobody")}</div>`}</div>
+        <div data-k="pos" hidden><label>${t("pm_tp_pos")}</label><select name="pos">${positions.map((x) => html`<option>${x.name}</option>`)}</select></div>
+        <div data-k="structure" hidden><label>${t("pm_tp_pf")}</label><select name="spf"></select>
+          <input type="search" name="sq" placeholder="${t("st_search")}"><label>${t("pm_tp_structure")}</label><select name="target"></select></div>
         <div class="hint">${t("pm_tp_hint")}</div>`,
         (f) => f.k.value === "pos" ? act("teleport_position", { name: f.pos.value })
-          : f.k.value === "player" ? act("teleport_to_player", { target: f.target.value.trim() })
-          : act("teleport_to_structure", { structureId: +f.target.value }));
+          : f.k.value === "player" ? (f.tplayer ? act("teleport_to_player", { target: f.tplayer.value }) : Promise.reject(Object.assign(new Error(), { code: "player_offline" })))
+          : (+f.target.value ? act("teleport_to_structure", { structureId: +f.target.value }) : Promise.reject(Object.assign(new Error(), { code: "not_found" }))));
+      const kind = dlg.querySelector("[name=k]");
+      let structures = null;
+      const spf = dlg.querySelector("[name=spf]"), sq = dlg.querySelector("[name=sq]"), ssel = dlg.querySelector("[name=target]");
+      const fillStructures = () => {
+        const q = sq.value.trim().toLowerCase();
+        const shown = (structures || []).filter((x) => x.playfield === spf.value
+          && (!q || x.name.toLowerCase().includes(q) || String(x.id).includes(q) || (x.owner || "").toLowerCase().includes(q)))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        mount(ssel, html`${shown.map((x) => html`<option value="${x.id}">${x.name} · ${x.type}${x.owner ? " · " + x.owner : ""} · #${x.id}</option>`)}`);
+      };
+      const loadStructures = async () => {
+        if (structures) return;
+        try { structures = (await api.get(`/api/servers/${s.id}/structures`)).list.filter((x) => !x.removedUtc); } catch { structures = []; }
+        const count = {};
+        structures.forEach((x) => { count[x.playfield] = (count[x.playfield] || 0) + 1; });
+        const here = info?.pf;
+        const pfs = Object.keys(count).sort((a, b) => (b === here) - (a === here) || a.localeCompare(b));
+        mount(spf, html`${pfs.map((x) => html`<option value="${x}">${x} (${count[x]})</option>`)}`);
+        fillStructures();
+      };
+      spf.addEventListener("change", fillStructures);
+      sq.addEventListener("input", fillStructures);
+      kind.addEventListener("change", () => {
+        dlg.querySelectorAll("[data-k]").forEach((d) => { d.hidden = d.dataset.k !== kind.value; });
+        if (kind.value === "structure") loadStructures();
+      });
     },
     faction: () => dialog(t("pm_faction"), html`<div class="form-row"><div><label>${t("pm_fgroup")}</label><input name="fg" type="number" min="0" max="255" value="${info?.factionGroup ?? ""}"></div>
       <div><label>${t("pm_fid")}</label><input name="fid" type="number" min="0" value="${info?.factionId ?? ""}"></div></div>

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.25 (2026-11-11) - Liaison avec le mod stable, téléport vers un joueur
+- Corrigé : sur un serveur avec beaucoup de structures, la liaison entre EAM et son mod en jeu se coupait toutes les 90 secondes (la liste des structures dépassait 1 Mo). Pendant chaque coupure, les actions passant par le mod échouaient (téléport, don d'objets, kick...). Les grandes réponses sont maintenant acceptées.
+- Une action lancée pendant une reconnexion attend quelques secondes la liaison au lieu d'échouer. Si la liaison tombe pendant l'action, l'erreur s'affiche tout de suite au lieu d'attendre la fin du délai.
+- Un message du mod qui ne peut pas être traité est ignoré et noté dans le journal, au lieu de couper la liaison. La cause d'une coupure est maintenant écrite dans le journal du serveur.
+- Téléporter vers un joueur : choix du joueur dans une liste des joueurs connectés (plus besoin du Steam ID). Le nom du joueur est aussi accepté.
+- Téléporter vers une structure : on choisit d'abord le playfield (avec le nombre de structures, celui du joueur en premier), puis la structure dans la liste (nom, type, propriétaire, numéro), avec une recherche.
+
 ## 0.9.24 (2026-11-10) - On reste dans le champ de texte
 - Corrigé : pendant qu'un serveur tourne, chaque mise à jour en direct faisait sortir du champ de texte en cours de saisie (annonces, réglages, chat, console...). Les mises à jour en direct ne changent plus que la barre du haut et l'avertissement ; l'onglet ouvert n'est plus touché (champ, défilement et listes déroulantes restent comme ils sont).
 

@@ -376,7 +376,10 @@ public sealed class PlayerService
             case "teleport_to_player":
             {
                 Need("gamemaster");
-                var target = _live.OnlineBySteam(id, r.Target ?? "") ?? throw new ServerException("player_offline");
+                var key = (r.Target ?? "").Trim();
+                var target = _live.OnlineBySteam(id, key)
+                    ?? _live.OnlinePlayers(id).FirstOrDefault(x => string.Equals(x.Name, key, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new ServerException("player_offline");
                 await TeleportAsync(id, online, target.Playfield, target.X, target.Y + 2, target.Z);
                 detail = "→ " + target.Name;
                 break;

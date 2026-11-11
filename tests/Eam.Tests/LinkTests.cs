@@ -86,6 +86,30 @@ public class LinkTests
     }
 
     [Fact]
+    public async Task BigAnswerDoesNotCutTheLink()
+    {
+        // A busy server's structure list is several MB: it used to exceed the 1 MB line limit and cut the link
+        // at every structure refresh (every 90 s), making teleports and other actions fail.
+        var port = FreePort();
+        const string key = "0123456789abcdef0123456789abcdef";
+        using var mod = new LinkServer(port, key, _ => { });
+        mod.Start();
+        await using var engine = await LinkClient.ConnectAsync(port, key, CancellationToken.None);
+        await Eventually(() => mod.Connected ? "" : null);
+
+        var list = Enumerable.Range(0, 30000).Select(i => (object)new Dictionary<string, object> { ["id"] = i, ["name"] = "Structure " + i + new string('x', 80) }).ToList();
+        mod.Send(new Dictionary<string, object> { ["ev"] = "structures", ["list"] = list });
+        mod.Send(new Dictionary<string, object> { ["ev"] = "after" });
+        var big = await engine.ReceiveAsync(CancellationToken.None);
+        Assert.Equal(30000, big!.Value.GetProperty("list").GetArrayLength());
+        var after = await engine.ReceiveAsync(CancellationToken.None);
+        Assert.Equal("after", after!.Value.GetProperty("ev").GetString());
+        Assert.False(engine.Closed.IsCompleted);
+        await engine.DisposeAsync();
+        Assert.True(engine.Closed.IsCompleted);
+    }
+
+    [Fact]
     public async Task WrongKeyIsRefused()
     {
         var port = FreePort();

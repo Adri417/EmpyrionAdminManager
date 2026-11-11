@@ -12,6 +12,16 @@ public sealed class LinkClient : IAsyncDisposable
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private NetworkStream? _stream;
     private StreamReader? _reader;
+    private readonly TaskCompletionSource _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Largest message accepted from the mod. Answers can be big (the structure list of a busy server is
+    /// several MB): the 1 MB limit of the mod's own input would cut the link at every structure refresh.
+    /// </summary>
+    public const int MaxIncomingLength = 256 * 1024 * 1024;
+
+    /// <summary>Completes when the link is closed (requests waiting for an answer then fail at once).</summary>
+    public Task Closed => _closed.Task;
 
     public bool Connected => _tcp.Connected && _stream is not null;
 
@@ -65,7 +75,7 @@ public sealed class LinkClient : IAsyncDisposable
             var line = await reader.ReadLineAsync(ct);
             if (line is null) return null;
             if (line.Length == 0) continue;
-            if (line.Length > LinkProtocol.MaxLineLength) throw new IOException("line_too_long");
+            if (line.Length > MaxIncomingLength) throw new IOException("line_too_long");
             using var doc = JsonDocument.Parse(line);
             return doc.RootElement.Clone();
         }
@@ -76,6 +86,7 @@ public sealed class LinkClient : IAsyncDisposable
         try { _tcp.Dispose(); } catch { }
         _stream = null;
         _reader = null;
+        _closed.TrySetResult();
         return ValueTask.CompletedTask;
     }
 }

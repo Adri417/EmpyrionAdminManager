@@ -49,6 +49,7 @@ public sealed class ServerLive
     public readonly HashSet<int> JustConnected = [];
     public bool Connected;
     public string? ModVersion;
+    public DateTime LastHandlerErrorUtc;
     public string? LinkError;
     public DateTime? ConnectedUtc;
     public readonly Dictionary<int, LivePlayer> Players = new();
@@ -89,7 +90,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
     /// </summary>
     public async Task<JsonElement> RequestAsync(long id, Dictionary<string, object?> request, TimeSpan? timeout = null)
     {
-        if (!_links.TryGetValue(id, out var link)) throw new ServerException("mod_not_connected");
+        var link = await WaitLinkAsync(id);
         var rid = Guid.NewGuid().ToString("N")[..12];
         request["rid"] = rid;
         var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -97,13 +98,28 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         try
         {
             await link.SendAsync(request);
-            var done = await Task.WhenAny(tcs.Task, Task.Delay(timeout ?? TimeSpan.FromSeconds(10)));
+            var done = await Task.WhenAny(tcs.Task, link.Closed, Task.Delay(timeout ?? TimeSpan.FromSeconds(10)));
+            if (done == link.Closed && !tcs.Task.IsCompleted) throw new ServerException("mod_link_lost");
             if (done != tcs.Task) throw new ServerException("game_timeout");
             var answer = tcs.Task.Result;
             if (Str(answer, "ev") == "error") throw new ServerException("game_error", Str(answer, "code"));
             return answer;
         }
         finally { _waiters.TryRemove(rid, out _); }
+    }
+
+    /// <summary>
+    /// The link of a server; when it is reconnecting (a few seconds), waits for it instead of failing at once.
+    /// </summary>
+    private async Task<LinkClient> WaitLinkAsync(long id)
+    {
+        for (var i = 0; i < 40; i++)
+        {
+            if (_links.TryGetValue(id, out var link)) return link;
+            if (!_linkTasks.ContainsKey(id)) break; // no link loop: the server is not running
+            await Task.Delay(250);
+        }
+        throw new ServerException("mod_not_connected");
     }
 
     /// <summary>Fire-and-forget request to the mod (no answer expected).</summary>
@@ -472,10 +488,26 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     {
                         var msg = await link.ReceiveAsync(_stopping);
                         if (msg is null) break;
-                        await HandleAsync(def, l, link, msg.Value);
+                        // One message that cannot be handled must never cut the link (every action through the
+                        // mod would fail while it reconnects): it is logged and skipped.
+                        try { await HandleAsync(def, l, link, msg.Value); }
+                        catch (Exception e) when (e is not OperationCanceledException && link.Connected)
+                        {
+                            var ev = Str(msg.Value, "ev") ?? "?";
+                            if (DateTime.UtcNow - l.LastHandlerErrorUtc > TimeSpan.FromMinutes(10))
+                            {
+                                l.LastHandlerErrorUtc = DateTime.UtcNow;
+                                ServerManager.ServerLog(def, $"EAM mod message '{ev}' ignored: {e.GetType().Name}: {e.Message}");
+                            }
+                            log.LogWarning(e, "Mod message '{Ev}' of '{Name}' failed", ev, def.Name);
+                        }
                     }
                 }
-                catch (Exception e) when (e is not OperationCanceledException) { log.LogDebug("Link of '{Name}' closed: {Err}", def.Name, e.Message); }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    log.LogDebug("Link of '{Name}' closed: {Err}", def.Name, e.Message);
+                    ServerManager.ServerLog(def, $"EAM mod link closed: {e.GetType().Name}: {e.Message}");
+                }
                 finally
                 {
                     _links.TryRemove(def.Id, out _);
