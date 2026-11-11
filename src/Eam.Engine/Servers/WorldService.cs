@@ -56,8 +56,9 @@ public sealed class WorldService : BackgroundService
                 {
                     var s = Settings(def);
                     // The game's global structure list blocks the whole server for several seconds on a big universe
-                    // (players changing playfield at that moment are disconnected): rarely, and never retried at once.
-                    // Without structure limits nothing needs a fresh list: every 30 minutes (the Structures page has a refresh button).
+                    // (players changing playfield at that moment are disconnected): read in the background ONLY when
+                    // nobody is online, rarely, and never retried at once.
+                    if (_live.OnlinePlayers(def.Id).Count > 0) continue;
                     var every = TimeSpan.FromMinutes(Math.Max(s.RefreshMinutes, s.LimitsEnabled ? WorldSettings.MinRefreshMinutes : 30));
                     if (_lastTry.TryGetValue(def.Id, out var tried) && DateTime.UtcNow - tried < every) continue;
                     _lastTry[def.Id] = DateTime.UtcNow;
@@ -67,6 +68,15 @@ public sealed class WorldService : BackgroundService
                 catch (Exception e) when (e is not OperationCanceledException) { _log.LogDebug("Structure refresh of '{Name}' failed: {Err}", def.Name, e.Message); }
             }
         }
+    }
+
+    /// <summary>
+    /// For automatic tasks: refreshes the structure list only when no player is online (the game freezes while
+    /// it builds the list); otherwise the last known list is used.
+    /// </summary>
+    public async Task RefreshIfEmptyAsync(long id)
+    {
+        if (_live.OnlinePlayers(id).Count == 0) await RefreshAsync(id);
     }
 
     /// <summary>Reads every structure from the game and records what changed.</summary>

@@ -281,11 +281,11 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
                 return "ok " + bs.Name;
             case "shared_cleanup":
                 if (!running) return "skipped_not_running";
-                await world.RefreshAsync(def.Id);
+                await world.RefreshIfEmptyAsync(def.Id);
                 return "ok " + JsonSerializer.Serialize(world.SharedClean(def.Id, who), Json);
             case "limits":
                 if (!running) return "skipped_not_running";
-                await world.RefreshAsync(def.Id);
+                await world.RefreshIfEmptyAsync(def.Id);
                 return "ok " + JsonSerializer.Serialize(world.Violations(def.Id), Json).Length + " bytes of report (see Structures > Rules)";
             case "cleanup_players":
                 return "ok " + live.Data(def).ForgetInactivePlayers(p.Days) + " rows";

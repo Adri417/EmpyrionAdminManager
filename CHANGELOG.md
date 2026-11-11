@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.27 (2026-11-11) - Zéro gel pendant que des joueurs jouent
+- EAM ne demande plus jamais au jeu la liste globale des structures tant qu'un joueur est connecté (le jeu se fige plusieurs secondes pendant cette lecture). La lecture automatique, et celle des tâches programmées (limites, nettoyage des Shared), se fait seulement quand personne n'est connecté ; sinon EAM utilise la dernière liste connue.
+- Le bouton « Relire depuis le jeu » de la page Structures demande une confirmation quand des joueurs sont connectés.
+
 ## 0.9.26 (2026-11-11) - Plus de gel du serveur toutes les 3 minutes
 - Corrigé : EAM demandait au jeu la liste de toutes les structures de l'univers toutes les 3 minutes (et toutes les 90 secondes après un échec). Sur un gros univers, le jeu se fige 6 à 7 secondes pendant cette lecture : un joueur qui changeait de planète à ce moment perdait la connexion (« Connection to playfield server lost »).
 - La liste est maintenant lue au plus toutes les 10 minutes quand les limites de structures sont actives, et toutes les 30 minutes sinon. Un échec n'est plus retenté aussitôt. Le bouton « Actualiser » de la page Structures lit la liste tout de suite.

@@ -3,11 +3,12 @@ import { api } from "./api.js";
 import { t, extend } from "./i18n.js";
 import { html, raw, mount, $, $$, toast, formatBytes } from "./dom.js";
 import { atLeast, fail, when, num, dialog, settingsForm } from "./ui.js";
+import { playerCount } from "./live.js";
 
 extend({
   fr: {
     tab_structures: "Structures", tab_playfields: "Playfields", add: "Ajouter",
-    st_search: "Rechercher (nom, numéro, propriétaire)…", st_all_types: "Tous les types", st_all_pf: "Tous les playfields", st_refresh: "Relire depuis le jeu",
+    st_search: "Rechercher (nom, numéro, propriétaire)…", st_all_types: "Tous les types", st_all_pf: "Tous les playfields", st_refresh: "Relire depuis le jeu", st_refresh_warn: "Des joueurs sont connectés. Le jeu se fige quelques secondes pendant la lecture : un joueur qui change de planète à ce moment peut être déconnecté. EAM relit la liste tout seul quand personne n'est connecté.",
     st_library: "Bibliothèque", st_rules: "Limites et règles", st_shared: "Nettoyer Shared", st_last: "Liste lue {0}", st_never: "Liste pas encore lue (serveur arrêté ou mod non connecté).",
     st_owner: "Propriétaire", st_type: "Type", st_class: "Classe", st_blocks: "Blocs", st_devices: "Appareils", st_visited: "Dernière visite", st_count: "{0} structure(s)",
     st_removed: "Détruites ou retirées depuis 2 jours", st_warned: "Au-delà d'une limite", st_powered: "Alimentée", st_first: "Vue pour la première fois",
@@ -46,7 +47,7 @@ extend({
   },
   en: {
     tab_structures: "Structures", tab_playfields: "Playfields", add: "Add",
-    st_search: "Search (name, number, owner)…", st_all_types: "All types", st_all_pf: "All playfields", st_refresh: "Read from the game",
+    st_search: "Search (name, number, owner)…", st_all_types: "All types", st_all_pf: "All playfields", st_refresh: "Read from the game", st_refresh_warn: "Players are online. The game freezes a few seconds while reading: a player changing planet at that moment can be disconnected. EAM reads the list by itself when nobody is online.",
     st_library: "Library", st_rules: "Limits and rules", st_shared: "Clean Shared", st_last: "List read {0}", st_never: "List not read yet (server stopped or mod not connected).",
     st_owner: "Owner", st_type: "Type", st_class: "Class", st_blocks: "Blocks", st_devices: "Devices", st_visited: "Last visit", st_count: "{0} structure(s)",
     st_removed: "Destroyed or removed in the last 2 days", st_warned: "Over a limit", st_powered: "Powered", st_first: "First seen",
@@ -138,8 +139,11 @@ async function renderStructures(el, s, me) {
     $("#st-type", el).addEventListener("change", (e) => { f.type = e.target.value; draw(); });
     $("#st-pf", el).addEventListener("change", (e) => { f.pf = e.target.value; draw(); });
     $("#st-refresh", el).addEventListener("click", async (e) => {
-      e.target.disabled = true;
-      try { await api.post(`/api/servers/${s.id}/structures/refresh`); await load(); } catch (ex) { fail(ex); e.target.disabled = false; }
+      const btn = e.target;
+      const go = async () => { btn.disabled = true; try { await api.post(`/api/servers/${s.id}/structures/refresh`); await load(); } catch (ex) { fail(ex); btn.disabled = false; } };
+      // Reading the list freezes the game a few seconds: players changing playfield at that moment are disconnected.
+      if (playerCount(s.id) > 0) dialog(t("st_refresh"), html`<div class="hint">${t("st_refresh_warn")}</div>`, async () => { go(); }, t("st_refresh"), true);
+      else go();
     });
     $("#st-lib", el)?.addEventListener("click", () => libraryDialog(s, me));
     $("#st-rules", el).addEventListener("click", () => rulesView(el, s, me, () => renderStructures(el, s, me)));
