@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.30 (2026-11-11) - Wipes programmés à l'heure d'un redémarrage
+- Corrigé : un wipe programmé à la même heure qu'un redémarrage (par exemple 04:55 et 18:55) était refusé (« not_running ») parce que le serveur était déjà en train de s'arrêter, et n'était donc jamais fait. Il attend maintenant que le serveur soit de nouveau en ligne (30 minutes au plus), puis se fait.
+
 ## 0.9.29 (2026-11-11) - Lecture des structures encore plus discrète
 - La lecture de la base de la sauvegarde se fait au plus toutes les 10 minutes (au lieu de 3) : un petit ralentissement d'environ 1 s du jeu avait été vu au même rythme. Si une lecture dure plus de 0,3 s, sa durée est écrite dans le journal du serveur.
 

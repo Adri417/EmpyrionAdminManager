@@ -209,6 +209,27 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
         _ = hub.BroadcastAsync(new { type = "tasks", id = def.Id }, CancellationToken.None);
     }
 
+    /// <summary>
+    /// When the server is being restarted (stopping or starting), waits until it runs again (at most 30 minutes).
+    /// False when it is simply stopped, or does not come back.
+    /// </summary>
+    private async Task<bool> WaitRunningAsync(ServerDefinition def, ServerState state)
+    {
+        if (state is not (ServerState.Stopping or ServerState.Starting)) return false;
+        ServerManager.ServerLog(def, "Scheduled wipe: the server is restarting, the wipe waits until it runs again");
+        var until = DateTime.UtcNow.AddMinutes(30);
+        while (DateTime.UtcNow < until)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10));
+            if (manager.Runtime(def.Id).State == ServerState.Running)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30)); // let the game finish starting (telnet, playfields)
+                return manager.Runtime(def.Id).State == ServerState.Running;
+            }
+        }
+        return false;
+    }
+
     private async Task<string> RunAsync(ServerDefinition def, ScheduledTask t, string by)
     {
         var p = JsonSerializer.Deserialize<TaskParams>(t.Params, Json) ?? new TaskParams();
@@ -243,14 +264,22 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
                 return "ok " + output.Replace("\r", " ").Replace("\n", " ").Trim();
             case "wipe":
             {
-                if (!running) return "skipped_not_running";
+                // A wipe planned at the same time as a restart (EAH habit: 04:55 restart + 04:55 wipes) finds the
+                // server stopping: it waits for the server to be back instead of being lost.
+                if (!running && !await WaitRunningAsync(def, rt.State)) return "skipped_not_running";
                 var targets = WipeTargets(def, p);
                 if (targets.Count == 0) return "skipped_no_playfield";
                 if (p.BackupFirst) await backups.CreateAsync(def.Id, "before-wipe", who, string.Join(", ", targets));
                 var done = new List<string>();
                 foreach (var pf in targets)
                 {
-                    await manager.ConsoleAsync(def.Id, $"wipe '{pf}' {p.Wipe}", who);
+                    try { await manager.ConsoleAsync(def.Id, $"wipe '{pf}' {p.Wipe}", who); }
+                    catch (ServerException e) when (e.Code == "not_running")
+                    {
+                        // The restart started meanwhile: wait until the server is back, then go on.
+                        if (!await WaitRunningAsync(def, manager.Runtime(def.Id).State)) throw;
+                        await manager.ConsoleAsync(def.Id, $"wipe '{pf}' {p.Wipe}", who);
+                    }
                     done.Add(pf);
                 }
                 return $"ok {p.Wipe}: {string.Join(", ", done)}";
