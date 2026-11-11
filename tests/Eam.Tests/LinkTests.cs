@@ -98,12 +98,17 @@ public class LinkTests
         await Eventually(() => mod.Connected ? "" : null);
 
         var list = Enumerable.Range(0, 30000).Select(i => (object)new Dictionary<string, object> { ["id"] = i, ["name"] = "Structure " + i + new string('x', 80) }).ToList();
-        mod.Send(new Dictionary<string, object> { ["ev"] = "structures", ["list"] = list });
-        mod.Send(new Dictionary<string, object> { ["ev"] = "after" });
+        // Sent from another thread: a 3 MB write blocks until the engine reads it (small socket buffers on Windows).
+        var sending = Task.Run(() =>
+        {
+            mod.Send(new Dictionary<string, object> { ["ev"] = "structures", ["list"] = list });
+            mod.Send(new Dictionary<string, object> { ["ev"] = "after" });
+        });
         var big = await engine.ReceiveAsync(CancellationToken.None);
         Assert.Equal(30000, big!.Value.GetProperty("list").GetArrayLength());
         var after = await engine.ReceiveAsync(CancellationToken.None);
         Assert.Equal("after", after!.Value.GetProperty("ev").GetString());
+        await sending;
         Assert.False(engine.Closed.IsCompleted);
         await engine.DisposeAsync();
         Assert.True(engine.Closed.IsCompleted);
