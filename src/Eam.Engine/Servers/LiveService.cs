@@ -11,6 +11,8 @@ public sealed class LivePlayer
     public int Id { get; init; }
     public string? SteamId { get; set; }
     public string Name { get; set; } = "";
+    /// <summary>When the game last sent this player's details.</summary>
+    public DateTime InfoUtc { get; set; }
     public string? Playfield { get; set; }
     public int FactionId { get; set; }
     public string? Faction { get; set; }
@@ -152,6 +154,17 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
     {
         var l = Live(id);
         lock (l.Gate) return l.Players.Values.FirstOrDefault(p => p.SteamId == steamId);
+    }
+
+    /// <summary>
+    /// The player with up-to-date position (details are refreshed only every ~30 s in the background):
+    /// one request to the game, for an action an admin asked for.
+    /// </summary>
+    public async Task<LivePlayer> FreshAsync(long id, LivePlayer p)
+    {
+        try { await RequestAsync(id, new() { ["op"] = "player", ["id"] = p.Id }, TimeSpan.FromSeconds(10)); } catch (ServerException) { return p; }
+        var l = Live(id);
+        lock (l.Gate) return l.Players.TryGetValue(p.Id, out var now) ? now : p;
     }
 
     public IReadOnlyList<LivePlayer> OnlinePlayers(long id)
@@ -575,7 +588,16 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 {
                     foreach (var gone in l.Players.Keys.Where(k => !ids.Contains(k)).ToList()) l.Players.Remove(gone);
                 }
-                foreach (var id in ids) await link.SendAsync(new { op = "player", id });
+                // Details of new players at once; the others in turn, about every 30 s each (a sixth of the list per
+                // 5 s round), so the load on the game does not grow with the number of players online.
+                List<int> ask;
+                lock (l.Gate)
+                {
+                    var known = ids.Where(l.Players.ContainsKey).OrderBy(i => l.Players[i].InfoUtc).ToList();
+                    ask = ids.Where(i => !l.Players.ContainsKey(i)).ToList();
+                    ask.AddRange(known.Take(Math.Max(1, (known.Count + 5) / 6)));
+                }
+                foreach (var id in ask) await link.SendAsync(new { op = "player", id });
                 break;
             }
 
@@ -590,6 +612,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                     isNew = !l.Players.TryGetValue(id, out var existing);
                     arrived = l.JustConnected.Remove(id);
                     p = existing ?? new LivePlayer { Id = id };
+                    p.InfoUtc = DateTime.UtcNow;
                     p.SteamId = Str(m, "steamId");
                     p.Name = Str(m, "name") ?? p.Name;
                     p.Playfield = Str(m, "pf");

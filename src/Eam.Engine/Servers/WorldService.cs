@@ -51,15 +51,16 @@ public sealed class WorldService : BackgroundService
         {
             foreach (var def in _manager.Definitions())
             {
-                if (!_live.IsLinked(def.Id)) continue;
+                if (_manager.Runtime(def.Id).State != ServerState.Running) continue;
                 try
                 {
                     var s = Settings(def);
-                    // The game's global structure list blocks the whole server for several seconds on a big universe
-                    // (players changing playfield at that moment are disconnected): read in the background ONLY when
-                    // nobody is online, rarely, and never retried at once.
-                    if (_live.OnlinePlayers(def.Id).Count > 0) continue;
-                    var every = TimeSpan.FromMinutes(Math.Max(s.RefreshMinutes, s.LimitsEnabled ? WorldSettings.MinRefreshMinutes : 30));
+                    var fromFile = GlobalDb.File(def) is not null;
+                    // From the save database: no effect on the game, as often as configured. Without it, the game's
+                    // global list freezes the server several seconds: only when nobody is online, rarely.
+                    if (!fromFile && (!_live.IsLinked(def.Id) || _live.OnlinePlayers(def.Id).Count > 0)) continue;
+                    var every = TimeSpan.FromMinutes(fromFile ? Math.Max(1, s.RefreshMinutes)
+                        : Math.Max(s.RefreshMinutes, s.LimitsEnabled ? WorldSettings.MinRefreshMinutes : 30));
                     if (_lastTry.TryGetValue(def.Id, out var tried) && DateTime.UtcNow - tried < every) continue;
                     _lastTry[def.Id] = DateTime.UtcNow;
                     await RefreshAsync(def.Id);
@@ -71,15 +72,21 @@ public sealed class WorldService : BackgroundService
     }
 
     /// <summary>
-    /// For automatic tasks: refreshes the structure list only when no player is online (the game freezes while
-    /// it builds the list); otherwise the last known list is used.
+    /// For automatic tasks: refreshes the structure list, but never asks the game while players are online
+    /// (the game freezes while it builds the list); then the last known list is used.
     /// </summary>
     public async Task RefreshIfEmptyAsync(long id)
     {
-        if (_live.OnlinePlayers(id).Count == 0) await RefreshAsync(id);
+        if (GlobalDb.File(_manager.Definition(id)) is not null || _live.OnlinePlayers(id).Count == 0) await RefreshAsync(id);
     }
 
-    /// <summary>Reads every structure from the game and records what changed.</summary>
+    /// <summary>Last "visited" tick seen per structure (global.db), to know when a structure was visited again.</summary>
+    private readonly ConcurrentDictionary<long, Dictionary<int, (long Ticks, DateTime? Utc)>> _visits = new();
+
+    /// <summary>
+    /// Reads every structure and records what changed: from the save database (global.db, read-only, the game
+    /// is not involved), or, when it cannot be read, from the game through the EAM mod.
+    /// </summary>
     public async Task<int> RefreshAsync(long id)
     {
         var gate = _gates.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
@@ -87,21 +94,48 @@ public sealed class WorldService : BackgroundService
         try
         {
             var def = _manager.Definition(id);
-            var answer = await _live.RequestAsync(id, new() { ["op"] = "structures" }, TimeSpan.FromSeconds(90));
             var now = DateTime.UtcNow;
             var list = new List<StructureRow>();
-            if (answer.TryGetProperty("list", out var arr) && arr.ValueKind == JsonValueKind.Array)
-                foreach (var s in arr.EnumerateArray())
+            List<GlobalDbStructure>? fromDb = null;
+            if (GlobalDb.File(def) is { } file)
+            {
+                try { fromDb = await Task.Run(() => GlobalDb.Structures(file)); }
+                catch (Exception e) { ServerManager.ServerLog(def, $"Structures: global.db not readable ({e.GetType().Name}: {e.Message})"); }
+            }
+            if (fromDb is not null)
+            {
+                var known = _live.Data(def).Structures().ToDictionary(x => x.Id);
+                var seen = _visits.GetOrAdd(id, _ => []);
+                var next = new Dictionary<int, (long, DateTime?)>();
+                foreach (var g in fromDb)
                 {
-                    var visited = (long)LiveService.Num(s, "visited");
-                    DateTime? lv = null;
-                    try { if (visited > 0) lv = DateTime.FromBinary(visited).ToUniversalTime(); } catch { }
-                    if (lv is { Year: < 2000 }) lv = null;
-                    list.Add(new StructureRow(LiveService.Int(s, "id"), LiveService.Str(s, "name") ?? "", LiveService.Int(s, "type"), LiveService.Str(s, "pf") ?? "",
-                        LiveService.Int(s, "fg"), LiveService.Int(s, "fid"), LiveService.Num(s, "x"), LiveService.Num(s, "y"), LiveService.Num(s, "z"),
-                        LiveService.Int(s, "blocks"), LiveService.Int(s, "devices"), LiveService.Int(s, "class"), LiveService.Int(s, "core"),
-                        LiveService.Str(s, "powered") == "true", lv, LiveService.Str(s, "ss"), now, now, null, null));
+                    // The database stores game ticks, not dates: a structure is "visited now" when its tick moves.
+                    DateTime? lv;
+                    if (seen.TryGetValue(g.Id, out var prev)) lv = g.LastVisitedTicks > prev.Ticks ? now : prev.Utc;
+                    else lv = known.TryGetValue(g.Id, out var k) ? k.LastVisitedUtc ?? now : now;
+                    next[g.Id] = (g.LastVisitedTicks, lv);
+                    list.Add(new StructureRow(g.Id, g.Name, g.Type, g.Playfield, g.FactionGroup, g.FactionId, g.X, g.Y, g.Z,
+                        g.Blocks, g.Devices, g.Class, g.Core, g.Powered, lv, g.SolarSystem, now, now, null, null));
                 }
+                _visits[id] = next;
+            }
+            else
+            {
+                if (_live.OnlinePlayers(id).Count > 0) throw new ServerException("structures_players_online");
+                var answer = await _live.RequestAsync(id, new() { ["op"] = "structures" }, TimeSpan.FromSeconds(90));
+                if (answer.TryGetProperty("list", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    foreach (var s in arr.EnumerateArray())
+                    {
+                        var visited = (long)LiveService.Num(s, "visited");
+                        DateTime? lv = null;
+                        try { if (visited > 0) lv = DateTime.FromBinary(visited).ToUniversalTime(); } catch { }
+                        if (lv is { Year: < 2000 }) lv = null;
+                        list.Add(new StructureRow(LiveService.Int(s, "id"), LiveService.Str(s, "name") ?? "", LiveService.Int(s, "type"), LiveService.Str(s, "pf") ?? "",
+                            LiveService.Int(s, "fg"), LiveService.Int(s, "fid"), LiveService.Num(s, "x"), LiveService.Num(s, "y"), LiveService.Num(s, "z"),
+                            LiveService.Int(s, "blocks"), LiveService.Int(s, "devices"), LiveService.Int(s, "class"), LiveService.Int(s, "core"),
+                            LiveService.Str(s, "powered") == "true", lv, LiveService.Str(s, "ss"), now, now, null, null));
+                    }
+            }
             var data = _live.Data(def);
             var events = data.SyncStructures(list, now);
             _lastRefresh[id] = now;

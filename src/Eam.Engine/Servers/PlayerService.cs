@@ -380,6 +380,7 @@ public sealed class PlayerService
                 var target = _live.OnlineBySteam(id, key)
                     ?? _live.OnlinePlayers(id).FirstOrDefault(x => string.Equals(x.Name, key, StringComparison.OrdinalIgnoreCase))
                     ?? throw new ServerException("player_offline");
+                target = await _live.FreshAsync(id, target);
                 await TeleportAsync(id, online, target.Playfield, target.X, target.Y + 2, target.Z);
                 detail = "→ " + target.Name;
                 break;
@@ -438,7 +439,8 @@ public sealed class PlayerService
                     var his = await _live.RequestAsync(id, new() { ["op"] = "player", ["id"] = online.Id, ["full"] = true });
                     await _live.RequestAsync(id, new() { ["op"] = "inventory_set", ["id"] = me.Id, ["toolbelt"] = his.GetProperty("toolbelt"), ["bag"] = his.GetProperty("bag") });
                     await _live.RequestAsync(id, new() { ["op"] = "player_set", ["id"] = me.Id, ["factionGroup"] = LiveService.Int(his, "factionGroup"), ["factionId"] = LiveService.Int(his, "factionId") });
-                    await TeleportAsync(id, me, online.Playfield, online.X, online.Y + 2, online.Z);
+                    var there = await _live.FreshAsync(id, online);
+                    await TeleportAsync(id, me, there.Playfield, there.X, there.Y + 2, there.Z);
                     detail = $"{me.Name} takes the place of {online.Name}";
                 }
                 else

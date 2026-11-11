@@ -239,7 +239,8 @@ public sealed class SecurityService : BackgroundService
                 var z = Math.Sign(p.Z) * (s.PoleLimit - 200);
                 try
                 {
-                    await _live.RequestAsync(def.Id, new() { ["op"] = "teleport", ["id"] = p.Id, ["x"] = p.X, ["y"] = p.Y + 60, ["z"] = z }, TimeSpan.FromSeconds(30));
+                    var fresh = await _live.FreshAsync(def.Id, p);
+                    await _live.RequestAsync(def.Id, new() { ["op"] = "teleport", ["id"] = p.Id, ["x"] = fresh.X, ["y"] = fresh.Y + 60, ["z"] = z }, TimeSpan.FromSeconds(30));
                     await _alerts.RaiseAsync(def, "pole", 1, $"moved out of the pole zone (z {p.Z:0} → {z:0})", p.SteamId, p.Name, p.Playfield);
                 }
                 catch (ServerException e) { _log.LogWarning("Pole move of {Name} failed: {Err}", p.Name, e.Code); }

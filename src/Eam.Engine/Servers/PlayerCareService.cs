@@ -39,12 +39,41 @@ public sealed class PlayerCareService : BackgroundService
                     var data = _live.Data(def);
                     var s = FeatureStore.Load<SecuritySettings>(data, "security");
                     await GodModeAsync(def, data);
-                    if (s.InventoryHistoryEnabled && Due(_lastSnap, def.Id, TimeSpan.FromMinutes(s.InventoryMinutes)))
-                        foreach (var p in _live.OnlinePlayers(def.Id)) await SnapshotAsync(def, p, "periodic");
+                    if (s.InventoryHistoryEnabled) await PeriodicSnapshotsAsync(def, TimeSpan.FromMinutes(Math.Max(1, s.InventoryMinutes)));
                     if (Due(_lastPrune, def.Id, TimeSpan.FromHours(6))) data.PruneInventorySnapshots(s.InventoryDays);
                 }
                 catch (Exception e) when (e is not OperationCanceledException) { _log.LogDebug("Player care of '{Name}' failed: {Err}", def.Name, e.Message); }
             }
+        }
+    }
+
+    /// <summary>Last periodic inventory copy per server and player.</summary>
+    private readonly ConcurrentDictionary<(long, string), DateTime> _lastPlayerSnap = new();
+
+    /// <summary>
+    /// One periodic copy per player and interval, spread over the interval (a few players per 10 s round)
+    /// instead of every player at the same second: the game gets a small, steady number of requests.
+    /// </summary>
+    private async Task PeriodicSnapshotsAsync(ServerDefinition def, TimeSpan every)
+    {
+        var now = DateTime.UtcNow;
+        var online = _live.OnlinePlayers(def.Id).Where(p => p.SteamId is { Length: > 0 }).ToList();
+        var perRound = Math.Max(1, (int)Math.Ceiling(online.Count * 10.0 / every.TotalSeconds));
+        var due = online
+            .Select(p => (p, last: _lastPlayerSnap.TryGetValue((def.Id, p.SteamId!), out var t) ? t : (DateTime?)null))
+            .Where(x => x.last is null || now - x.last.Value >= every)
+            .OrderBy(x => x.last ?? DateTime.MinValue)
+            .Take(perRound).ToList();
+        foreach (var (p, last) in due)
+        {
+            if (last is null)
+            {
+                // First time seen: spread the first copies over the interval.
+                _lastPlayerSnap[(def.Id, p.SteamId!)] = now - TimeSpan.FromSeconds(Random.Shared.NextDouble() * every.TotalSeconds);
+                continue;
+            }
+            _lastPlayerSnap[(def.Id, p.SteamId!)] = now;
+            await SnapshotAsync(def, p, "periodic");
         }
     }
 

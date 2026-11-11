@@ -3,7 +3,6 @@ import { api } from "./api.js";
 import { t, extend } from "./i18n.js";
 import { html, raw, mount, $, $$, toast, formatBytes } from "./dom.js";
 import { atLeast, fail, when, num, dialog, settingsForm } from "./ui.js";
-import { playerCount } from "./live.js";
 
 extend({
   fr: {
@@ -40,7 +39,7 @@ extend({
     gal_systems: "{0} système(s)", wipe_confirm: "Wipe « {0} » sur {1} ?",
     err_structure_not_found: "Structure inconnue.", err_export_failed: "Le jeu n'a pas exporté la structure.", err_library_not_found: "Introuvable dans la bibliothèque.",
     err_blueprint_not_found: "Blueprint introuvable.", err_invalid_file: "Fichier refusé (.epb, 50 Mo max).", err_invalid_name: "Nom invalide.", err_invalid_playfield: "Playfield invalide.",
-    err_invalid_faction: "Faction invalide.", err_invalid_source: "Source invalide.", err_structures_not_fresh: "Relisez d'abord la liste des structures (serveur en ligne).",
+    err_invalid_faction: "Faction invalide.", err_invalid_source: "Source invalide.", err_structures_not_fresh: "Relisez d'abord la liste des structures (serveur en ligne).", err_structures_players_online: "Base de la sauvegarde illisible et des joueurs sont connectés : la liste sera relue quand personne ne sera connecté (le jeu se fige pendant la lecture).",
     err_mod_not_connected: "Le mod EAM n'est pas connecté (serveur arrêté ?).", err_invalid_limit: "Règle de limite incomplète.", err_invalid_autowipe: "Règle de wipe incomplète.",
     err_invalid_reserved: "Playfield réservé incomplet.", err_invalid_refresh: "Intervalle invalide.", err_invalid_grace: "Délai invalide.", err_invalid_age: "Âge invalide.",
     err_invalid_limit_action: "Action invalide.", err_invalid_json: "Données invalides.", err_not_found: "Introuvable.",
@@ -79,7 +78,7 @@ extend({
     gal_systems: "{0} system(s)", wipe_confirm: "Wipe \"{0}\" on {1}?",
     err_structure_not_found: "Unknown structure.", err_export_failed: "The game did not export the structure.", err_library_not_found: "Not found in the library.",
     err_blueprint_not_found: "Blueprint not found.", err_invalid_file: "File refused (.epb, 50 MB max).", err_invalid_name: "Invalid name.", err_invalid_playfield: "Invalid playfield.",
-    err_invalid_faction: "Invalid faction.", err_invalid_source: "Invalid source.", err_structures_not_fresh: "Read the structure list first (server online).",
+    err_invalid_faction: "Invalid faction.", err_invalid_source: "Invalid source.", err_structures_not_fresh: "Read the structure list first (server online).", err_structures_players_online: "Save database not readable and players are online: the list will be read when nobody is online (the game freezes while reading it).",
     err_mod_not_connected: "The EAM mod is not connected (server stopped?).", err_invalid_limit: "Incomplete limit rule.", err_invalid_autowipe: "Incomplete wipe rule.",
     err_invalid_reserved: "Incomplete reserved playfield.", err_invalid_refresh: "Invalid interval.", err_invalid_grace: "Invalid delay.", err_invalid_age: "Invalid age.",
     err_invalid_limit_action: "Invalid action.", err_invalid_json: "Invalid data.", err_not_found: "Not found.",
@@ -141,9 +140,7 @@ async function renderStructures(el, s, me) {
     $("#st-refresh", el).addEventListener("click", async (e) => {
       const btn = e.target;
       const go = async () => { btn.disabled = true; try { await api.post(`/api/servers/${s.id}/structures/refresh`); await load(); } catch (ex) { fail(ex); btn.disabled = false; } };
-      // Reading the list freezes the game a few seconds: players changing playfield at that moment are disconnected.
-      if (playerCount(s.id) > 0) dialog(t("st_refresh"), html`<div class="hint">${t("st_refresh_warn")}</div>`, async () => { go(); }, t("st_refresh"), true);
-      else go();
+      go();
     });
     $("#st-lib", el)?.addEventListener("click", () => libraryDialog(s, me));
     $("#st-rules", el).addEventListener("click", () => rulesView(el, s, me, () => renderStructures(el, s, me)));

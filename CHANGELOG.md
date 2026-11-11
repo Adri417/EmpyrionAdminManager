@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.28 (2026-11-11) - Le moins de demandes possible au jeu
+- La liste des structures est maintenant lue directement dans la base de la sauvegarde (global.db), en lecture seule : le jeu n'est plus sollicité du tout, aucun gel, quel que soit le nombre de joueurs. La page Structures, les limites et les tâches programmées ont donc à nouveau une liste à jour pendant que les joueurs jouent. Si la base ne peut pas être lue, EAM revient à l'ancienne méthode, seulement quand personne n'est connecté.
+- Infos des joueurs connectés : avant, EAM demandait les détails de chaque joueur toutes les 5 secondes (14 demandes par seconde à 70 joueurs). Maintenant : tout de suite pour un joueur qui arrive, puis chacun à son tour environ toutes les 30 secondes. Avant un téléport vers un joueur (ou « getshiphere », ou une sortie de zone de pôle), sa position est relue juste avant.
+- Copies d'inventaire automatiques : étalées sur l'intervalle (quelques joueurs à la fois) au lieu de tous les joueurs à la même seconde.
+
 ## 0.9.27 (2026-11-11) - Zéro gel pendant que des joueurs jouent
 - EAM ne demande plus jamais au jeu la liste globale des structures tant qu'un joueur est connecté (le jeu se fige plusieurs secondes pendant cette lecture). La lecture automatique, et celle des tâches programmées (limites, nettoyage des Shared), se fait seulement quand personne n'est connecté ; sinon EAM utilise la dernière liste connue.
 - Le bouton « Relire depuis le jeu » de la page Structures demande une confirmation quand des joueurs sont connectés.

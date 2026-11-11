@@ -280,6 +280,7 @@ public sealed partial class CommunityService
                     if (st.Type == EntityTypes.BA) throw new ServerException("not_yours");
                     if (!string.Equals(st.Playfield, p.Playfield, StringComparison.OrdinalIgnoreCase)) throw new ServerException("structure_not_found");
                     if (CoolingDown(data, steam, s)) throw new ServerException("cooldown");
+                    p = await _live.FreshAsync(def.Id, p);
                     await _live.RequestAsync(def.Id, new() { ["op"] = "entity_move", ["id"] = sid, ["x"] = p.X + 25, ["y"] = p.Y + 15, ["z"] = p.Z + 25 }, TimeSpan.FromSeconds(30));
                     data.StructureEventBy(sid, "player_getshiphere", null, $"{p.X:0}, {p.Y:0}, {p.Z:0}", p.Name);
                     await ReplyAsync(def, p, $"EAM: « {st.Name} » arrive / is coming");
