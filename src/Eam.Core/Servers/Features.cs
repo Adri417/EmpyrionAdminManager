@@ -111,6 +111,8 @@ public sealed class WorldSettings : IFeatureSettings
 {
     /// <summary>Minimum interval of the automatic structure refresh (the game blocks while it builds the list).</summary>
     public const int MinRefreshMinutes = 10;
+    /// <summary>Minimum interval when the list comes from the save database (a short read, but the game writes to it too).</summary>
+    public const int MinDbRefreshMinutes = 10;
     public int RefreshMinutes { get; set; } = 15;
     public bool LimitsEnabled { get; set; }
     public List<LimitRule> Limits { get; set; } = [];

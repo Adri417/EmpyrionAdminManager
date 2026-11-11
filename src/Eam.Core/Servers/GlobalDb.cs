@@ -63,6 +63,7 @@ public static class GlobalDb
             LEFT JOIN SolarSystems ss ON ss.ssid = p.ssid
             WHERE e.isstructure = 1 AND IFNULL(e.isremoved, 0) = 0 AND e.etype IN (2, 3, 4, 5);
             """;
+        // One quick pass, then the connection is closed: the game's checkpoints never wait long for this reader.
         using var r = q.ExecuteReader();
         static int I(SqliteDataReader r, int i) => r.IsDBNull(i) ? 0 : (int)r.GetInt64(i);
         static double D(SqliteDataReader r, int i) => r.IsDBNull(i) ? 0 : r.GetDouble(i);

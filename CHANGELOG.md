@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.29 (2026-11-11) - Lecture des structures encore plus discrète
+- La lecture de la base de la sauvegarde se fait au plus toutes les 10 minutes (au lieu de 3) : un petit ralentissement d'environ 1 s du jeu avait été vu au même rythme. Si une lecture dure plus de 0,3 s, sa durée est écrite dans le journal du serveur.
+
 ## 0.9.28 (2026-11-11) - Le moins de demandes possible au jeu
 - La liste des structures est maintenant lue directement dans la base de la sauvegarde (global.db), en lecture seule : le jeu n'est plus sollicité du tout, aucun gel, quel que soit le nombre de joueurs. La page Structures, les limites et les tâches programmées ont donc à nouveau une liste à jour pendant que les joueurs jouent. Si la base ne peut pas être lue, EAM revient à l'ancienne méthode, seulement quand personne n'est connecté.
 - Infos des joueurs connectés : avant, EAM demandait les détails de chaque joueur toutes les 5 secondes (14 demandes par seconde à 70 joueurs). Maintenant : tout de suite pour un joueur qui arrive, puis chacun à son tour environ toutes les 30 secondes. Avant un téléport vers un joueur (ou « getshiphere », ou une sortie de zone de pôle), sa position est relue juste avant.

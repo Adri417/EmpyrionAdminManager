@@ -59,7 +59,7 @@ public sealed class WorldService : BackgroundService
                     // From the save database: no effect on the game, as often as configured. Without it, the game's
                     // global list freezes the server several seconds: only when nobody is online, rarely.
                     if (!fromFile && (!_live.IsLinked(def.Id) || _live.OnlinePlayers(def.Id).Count > 0)) continue;
-                    var every = TimeSpan.FromMinutes(fromFile ? Math.Max(1, s.RefreshMinutes)
+                    var every = TimeSpan.FromMinutes(fromFile ? Math.Max(WorldSettings.MinDbRefreshMinutes, s.RefreshMinutes)
                         : Math.Max(s.RefreshMinutes, s.LimitsEnabled ? WorldSettings.MinRefreshMinutes : 30));
                     if (_lastTry.TryGetValue(def.Id, out var tried) && DateTime.UtcNow - tried < every) continue;
                     _lastTry[def.Id] = DateTime.UtcNow;
@@ -99,7 +99,12 @@ public sealed class WorldService : BackgroundService
             List<GlobalDbStructure>? fromDb = null;
             if (GlobalDb.File(def) is { } file)
             {
-                try { fromDb = await Task.Run(() => GlobalDb.Structures(file)); }
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    fromDb = await Task.Run(() => GlobalDb.Structures(file));
+                    if (watch.ElapsedMilliseconds > 300) ServerManager.ServerLog(def, $"Structures: global.db read in {watch.ElapsedMilliseconds} ms ({fromDb.Count})");
+                }
                 catch (Exception e) { ServerManager.ServerLog(def, $"Structures: global.db not readable ({e.GetType().Name}: {e.Message})"); }
             }
             if (fromDb is not null)
