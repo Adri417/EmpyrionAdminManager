@@ -20,6 +20,7 @@ public sealed record SpawnRequest(string Source, string Name, string Playfield, 
 /// </summary>
 public sealed class WorldService : BackgroundService
 {
+    private readonly ConcurrentDictionary<long, DateTime> _lastTry = new();
     private readonly ServerManager _manager;
     private readonly LiveService _live;
     private readonly LiveHub _hub;
@@ -54,7 +55,12 @@ public sealed class WorldService : BackgroundService
                 try
                 {
                     var s = Settings(def);
-                    if (_lastRefresh.TryGetValue(def.Id, out var last) && DateTime.UtcNow - last < TimeSpan.FromMinutes(s.RefreshMinutes)) continue;
+                    // The game's global structure list blocks the whole server for several seconds on a big universe
+                    // (players changing playfield at that moment are disconnected): rarely, and never retried at once.
+                    // Without structure limits nothing needs a fresh list: every 30 minutes (the Structures page has a refresh button).
+                    var every = TimeSpan.FromMinutes(Math.Max(s.RefreshMinutes, s.LimitsEnabled ? WorldSettings.MinRefreshMinutes : 30));
+                    if (_lastTry.TryGetValue(def.Id, out var tried) && DateTime.UtcNow - tried < every) continue;
+                    _lastTry[def.Id] = DateTime.UtcNow;
                     await RefreshAsync(def.Id);
                     await EnforceAsync(def, s);
                 }

@@ -109,7 +109,9 @@ public sealed class ReservedPlayfield
 
 public sealed class WorldSettings : IFeatureSettings
 {
-    public int RefreshMinutes { get; set; } = 3;
+    /// <summary>Minimum interval of the automatic structure refresh (the game blocks while it builds the list).</summary>
+    public const int MinRefreshMinutes = 10;
+    public int RefreshMinutes { get; set; } = 15;
     public bool LimitsEnabled { get; set; }
     public List<LimitRule> Limits { get; set; } = [];
     /// <summary>"warn" (list and warn the owner) or "destroy" (after the grace period, saved first in the structure library).</summary>
@@ -135,7 +137,7 @@ public sealed class WorldSettings : IFeatureSettings
 
     public void Validate()
     {
-        FeatureStore.Need(RefreshMinutes is >= 1 and <= 60, "invalid_refresh");
+        FeatureStore.Need(RefreshMinutes is >= 1 and <= 240, "invalid_refresh");
         FeatureStore.Need(LimitAction is "warn" or "destroy" or "sanction", "invalid_limit_action");
         FeatureStore.Need(LimitAction != "sanction" || Regex.IsMatch(SanctionFaction.Trim(), "^[^'\\s]{1,12}$"), "invalid_faction");
         FeatureStore.Need(UntouchedPublicHours == 0 || Regex.IsMatch(PublicFaction.Trim(), "^[^'\\s]{1,12}$"), "invalid_faction");

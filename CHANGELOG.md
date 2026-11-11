@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.26 (2026-11-11) - Plus de gel du serveur toutes les 3 minutes
+- Corrigé : EAM demandait au jeu la liste de toutes les structures de l'univers toutes les 3 minutes (et toutes les 90 secondes après un échec). Sur un gros univers, le jeu se fige 6 à 7 secondes pendant cette lecture : un joueur qui changeait de planète à ce moment perdait la connexion (« Connection to playfield server lost »).
+- La liste est maintenant lue au plus toutes les 10 minutes quand les limites de structures sont actives, et toutes les 30 minutes sinon. Un échec n'est plus retenté aussitôt. Le bouton « Actualiser » de la page Structures lit la liste tout de suite.
+
 ## 0.9.25 (2026-11-11) - Liaison avec le mod stable, téléport vers un joueur
 - Corrigé : sur un serveur avec beaucoup de structures, la liaison entre EAM et son mod en jeu se coupait toutes les 90 secondes (la liste des structures dépassait 1 Mo). Pendant chaque coupure, les actions passant par le mod échouaient (téléport, don d'objets, kick...). Les grandes réponses sont maintenant acceptées.
 - Une action lancée pendant une reconnexion attend quelques secondes la liaison au lieu d'échouer. Si la liaison tombe pendant l'action, l'erreur s'affiche tout de suite au lieu d'attendre la fin du délai.
