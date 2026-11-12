@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.31 (2026-11-12) - Mise à jour du jeu depuis EAM
+- Corrigé : la mise à jour du jeu depuis EAM pouvait échouer à chaque essai (« Failed to get manifest request code, 'Access Denied' », « state 0x6 »). Entre deux essais, EAM vide maintenant les caches de SteamCMD et le téléchargement inachevé du jeu (rien du jeu installé ni des sauvegardes n'est touché), puis réessaie.
+
 ## 0.9.30 (2026-11-11) - Wipes programmés à l'heure d'un redémarrage
 - Corrigé : un wipe programmé à la même heure qu'un redémarrage (par exemple 04:55 et 18:55) était refusé (« not_running ») parce que le serveur était déjà en train de s'arrêter, et n'était donc jamais fait. Il attend maintenant que le serveur soit de nouveau en ligne (30 minutes au plus), puis se fait.
 

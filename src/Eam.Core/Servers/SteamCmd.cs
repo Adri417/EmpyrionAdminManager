@@ -63,6 +63,9 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
                 if (attempt >= 3)
                     throw new InvalidOperationException(lastError ?? $"steamcmd_exit_{code}");
                 log?.Invoke($"SteamCMD exited with code {code}, retrying ({attempt}/3)");
+                // "Failed to get manifest request code, 'Access Denied'" / "state 0x6": a stale SteamCMD cache or a
+                // half-done download from an earlier attempt. Start the next attempt from a clean state.
+                ClearCaches(installDir, log);
             }
         }
         finally { Gate.Release(); }
@@ -151,6 +154,30 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
         if (!File.Exists(manifest)) return null;
         var m = BuildIdRegex().Match(File.ReadAllText(manifest));
         return m.Success ? m.Groups[1].Value : null;
+    }
+
+    /// <summary>
+    /// Removes SteamCMD's caches (app info, depot manifests) and the unfinished download of the game.
+    /// Nothing of the installed game or its saves is touched.
+    /// </summary>
+    private void ClearCaches(string installDir, Action<string>? log)
+    {
+        foreach (var dir in new[]
+        {
+            Path.Combine(steamCmdDir, "appcache"),
+            Path.Combine(steamCmdDir, "depotcache"),
+            Path.Combine(installDir, "steamapps", "downloading"),
+            Path.Combine(installDir, "steamapps", "temp"),
+        })
+        {
+            try
+            {
+                if (!Directory.Exists(dir)) continue;
+                Directory.Delete(dir, recursive: true);
+                log?.Invoke("Cleared " + dir);
+            }
+            catch (Exception e) { log?.Invoke($"Could not clear {dir}: {e.Message}"); }
+        }
     }
 
     private async Task<(int code, bool success, string? error)> RunAsync(List<string> args, IProgress<SteamProgress>? progress, Action<string>? log, CancellationToken ct)
