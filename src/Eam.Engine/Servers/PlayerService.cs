@@ -34,6 +34,7 @@ public sealed class PlayerService
         _log = log;
         _live.PlayerJoined += DeliverOfflineMessagesAsync;
         _live.PlayerJoined += ApplyPendingInventoryAsync;
+        _live.PlayerJoined += BlockDuringResetAsync;
     }
 
     public object List(long id)
@@ -277,10 +278,11 @@ public sealed class PlayerService
                 break;
             }
             case "survival_reset":
-                Need("gamemaster");
-                data.DeleteCounter(steamId, "cb_survival");
-                data.DeleteCounter(steamId, "cb_heal");
-                detail = "";
+            case "reset":
+                // New character from zero, the player online or not (kicked first, file moved aside after the
+                // game has written it at logoff).
+                Need("admin");
+                detail = await ResetCharacterAsync(id, steamId, by);
                 break;
             case "playtime_reset":
                 Need("admin");
@@ -407,22 +409,17 @@ public sealed class PlayerService
                 break;
             }
             case "load_file":
-            case "reset":
             {
                 Need("admin");
                 if (online is not null) throw new ServerException("player_must_be_offline");
                 var dst = PlayerFile(def, steamId);
                 var aside = Path.Combine(def.EamDir, "players-removed", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
                 if (File.Exists(dst)) { Directory.CreateDirectory(aside); File.Move(dst, Path.Combine(aside, Path.GetFileName(dst))); }
-                if (r.Action == "load_file")
-                {
-                    var name = Path.GetFileName(r.Name ?? "");
-                    var src = Path.Combine(def.EamDir, "player-saves", steamId, name);
-                    if (name.Length == 0 || !File.Exists(src)) throw new ServerException("not_found");
-                    File.Copy(src, dst);
-                    detail = name;
-                }
-                else detail = "player file moved to " + aside;
+                var name = Path.GetFileName(r.Name ?? "");
+                var src = Path.Combine(def.EamDir, "player-saves", steamId, name);
+                if (name.Length == 0 || !File.Exists(src)) throw new ServerException("not_found");
+                File.Copy(src, dst);
+                detail = name;
                 break;
             }
             case "impersonate":
@@ -471,7 +468,74 @@ public sealed class PlayerService
     private static string Raw(JsonElement e, string key) => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Array ? v.GetRawText() : "[]";
 
     public static string PlayerFile(ServerDefinition def, string steamId) =>
-        Path.Combine(def.GameDir, "Saves", "Games", WorldService.SaveName(def), "Players", steamId + ".ply");
+        Path.Combine(GlobalDb.SaveGameDir(def) ?? Path.Combine(BackupArchive.SavesDir(def), "Games", WorldService.SaveName(def)), "Players", steamId + ".ply");
+
+    /// <summary>
+    /// The player starts again from zero, as if they had never come: kicked if online (and kicked again if they
+    /// come back meanwhile), then, once the game has written their file at logoff, the file is moved aside
+    /// (kept in eam\players-removed). Their EAM counters (survival kit, heal) are cleared. Throws when it did not work.
+    /// </summary>
+    public async Task<string> ResetCharacterAsync(long id, string steamId, string by)
+    {
+        var def = _manager.Definition(id);
+        var data = _live.Data(def);
+        var name = data.Players().FirstOrDefault(x => x.SteamId == steamId)?.Name ?? steamId;
+        data.SetCounter(steamId, "reset_pending", 1);
+        try
+        {
+            for (var round = 0; round < 6; round++)
+            {
+                if (_live.OnlineBySteam(id, steamId) is { } on) await KickAsync(id, on, "Reset: reconnectez-vous dans 1 min / log in again in 1 min", by);
+                for (var w = 0; w < 20 && _live.OnlineBySteam(id, steamId) is not null; w++) await Task.Delay(1000);
+                if (_live.OnlineBySteam(id, steamId) is not null) continue;
+
+                // The game writes the player file when they leave: wait until it no longer changes.
+                var file = PlayerFile(def, steamId);
+                var last = File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue;
+                var stable = 0;
+                for (var w = 0; w < 60 && stable < 8; w++)
+                {
+                    await Task.Delay(1000);
+                    var now = File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue;
+                    stable = now == last ? stable + 1 : 0;
+                    last = now;
+                }
+                if (_live.OnlineBySteam(id, steamId) is not null) continue; // came back: kick again
+
+                string detail;
+                if (File.Exists(file))
+                {
+                    var aside = Path.Combine(def.EamDir, "players-removed", DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-reset");
+                    Directory.CreateDirectory(aside);
+                    File.Move(file, Path.Combine(aside, Path.GetFileName(file)), true);
+                    if (File.Exists(file)) throw new ServerException("reset_failed");
+                    detail = "player file moved to " + aside;
+                }
+                else detail = "no player file (" + file + ")";
+                data.DeleteCounter(steamId, "cb_survival");
+                data.DeleteCounter(steamId, "cb_heal");
+                data.DeleteCounter(steamId, "pending_inventory");
+                ServerManager.ServerLog(def, $"Reset of {name} ({steamId}) by {by}: {detail}");
+                return detail;
+            }
+            throw new ServerException("reset_player_still_online");
+        }
+        finally
+        {
+            // A few more seconds so a player reconnecting at once is still turned away while the game settles.
+            _ = Task.Run(async () => { await Task.Delay(TimeSpan.FromSeconds(15)); data.DeleteCounter(steamId, "reset_pending"); });
+        }
+    }
+
+    /// <summary>A player who logs in while their reset is in progress is kicked (their old file would come back).</summary>
+    private async Task BlockDuringResetAsync(ServerDefinition def, LivePlayer p)
+    {
+        if (p.SteamId is not { Length: > 0 } steam) return;
+        var c = _live.Data(def).Counter(steam, "reset_pending");
+        if (c is null || DateTime.UtcNow - c.LastUtc > TimeSpan.FromMinutes(5)) return;
+        try { await KickAsync(def.Id, p, "Reset en cours, reconnectez-vous dans 1 min / reset in progress, log in again in 1 min", "EAM (reset)"); }
+        catch (Exception e) { _log.LogWarning("Kick during reset of {Name} failed: {Err}", p.Name, e.Message); }
+    }
 
     private async Task<long> SaveCurrentAsync(ServerDefinition def, LivePlayer? p, string reason)
     {

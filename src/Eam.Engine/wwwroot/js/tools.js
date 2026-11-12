@@ -314,7 +314,7 @@ async function renderPlayer(el, s, me, steamId, back) {
     ["item", "a_item", "gamemaster", true], ["teleport", "a_teleport", "gamemaster", true], ["heal", "a_heal", "gamemaster", true],
     ["bp", "a_bp", "gamemaster", true], ["role", "a_role", "admin", false],
     ["god", p.meta?.god ? "pm_god_off" : "pm_god_on", "gamemaster", false], ["tp_more", "pm_tp_more", "gamemaster", true],
-    ["faction", "pm_faction", "admin", true], ["bp_res", "pm_bp_res", "gamemaster", true], ["survival", "pm_survival_reset", "gamemaster", false],
+    ["faction", "pm_faction", "admin", true], ["bp_res", "pm_bp_res", "gamemaster", true], ["survival", "pm_survival_reset", "admin", false],
     ["playtime", "pm_playtime_reset", "admin", false], ["files", "pm_files", "admin", false], ["impersonate", "pm_impersonate", "admin", true],
   ].filter(([, , role, needsOnline]) => atLeast(me.role, role) && (!needsOnline || p.online));
 
@@ -454,7 +454,7 @@ async function renderPlayer(el, s, me, steamId, back) {
     heal: () => act("heal").catch(fail),
     bp: () => act("bp_finish").catch(fail),
     god: () => act("god", { on: !p.meta?.god }).catch(fail),
-    survival: () => act("survival_reset").catch(fail),
+    survival: () => { if (confirm(t("pm_reset_confirm"))) act("survival_reset").catch(fail); },
     playtime: () => act("playtime_reset").catch(fail),
     tp_more: async () => {
       let positions = [], players = [];

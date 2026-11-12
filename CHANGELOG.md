@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.34 (2026-11-13) - Recommencer la survie à zéro
+- Corrigé : CB:reset et le bouton « Recommencer la survie à zéro » ne remettaient pas vraiment le joueur à zéro (il revenait avec ses affaires). Maintenant : le joueur est kické, EAM attend que le jeu ait fini d'écrire son fichier, puis le supprime (une copie est gardée dans eam\players-removed). S'il se reconnecte pendant le reset, il est kické de nouveau. Si ça rate, EAM affiche une erreur au lieu de « ok ».
+- Le fichier du joueur est cherché dans le vrai dossier de sauvegarde du serveur (SaveDirectory du dedicated.yaml).
+- CB:reset : le joueur confirme en répondant « oui » (ou en retapant CB:reset) dans la minute. CB:restart reste le redémarrage du serveur (admins).
+- Le bouton « Recommencer la survie à zéro » demande une confirmation et fonctionne joueur connecté ou non (rôle admin).
+
 ## 0.9.33 (2026-11-12) - Bouton « Mettre à jour » sans risque
 - Bouton « Mettre à jour » sur un serveur en marche déjà à jour sur Steam : rien n'est fait (pas de redémarrage, les joueurs ne sont pas kickés). EAM affiche « déjà à jour ».
 

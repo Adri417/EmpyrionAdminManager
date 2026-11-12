@@ -18,15 +18,17 @@ public sealed partial class CommunityService
     private readonly WorldService _world;
     private readonly Alerts _alerts;
     private readonly BackupService _backups;
+    private readonly PlayerService _players;
     private readonly ILogger<CommunityService> _log;
 
-    public CommunityService(ServerManager manager, LiveService live, SchedulerService scheduler, WorldService world, Alerts alerts, BackupService backups, ILogger<CommunityService> log)
+    public CommunityService(ServerManager manager, LiveService live, SchedulerService scheduler, WorldService world, Alerts alerts, BackupService backups, PlayerService players, ILogger<CommunityService> log)
     {
         _manager = manager;
         _live = live;
         _scheduler = scheduler;
         _world = world;
         _alerts = alerts;
+        _players = players;
         _backups = backups;
         _log = log;
         _live.ChatReceived += OnChatAsync;
@@ -87,8 +89,11 @@ public sealed partial class CommunityService
 
         if (!s.ChatbotEnabled) return;
         if (text.Equals("!mods", StringComparison.OrdinalIgnoreCase)) { await ReplyAsync(def, sender, ModsText(def)); return; }
-        if (!text.StartsWith(s.Prefix, StringComparison.OrdinalIgnoreCase)) return;
-        var command = text[s.Prefix.Length..].Trim();
+        var command = text.StartsWith(s.Prefix, StringComparison.OrdinalIgnoreCase) ? text[s.Prefix.Length..].Trim() : null;
+        if (command is null && s.ResetEnabled && text.Trim().ToLowerInvariant() is "oui" or "yes" or "o" or "y"
+            && _live.Data(def).Counter(steam, "cb_reset_confirm") is { } pending && DateTime.UtcNow - pending.LastUtc <= TimeSpan.FromMinutes(1))
+            command = "reset";
+        if (command is null) return;
         try { await CommandAsync(def, s, sender, steam, command); }
         catch (ServerException e) { await ReplyAsync(def, sender, "EAM: " + Explain(e.Code)); }
         catch (Exception e) { _log.LogWarning("Chatbot command '{Cmd}' failed: {Err}", command, e.Message); }
@@ -332,31 +337,25 @@ public sealed partial class CommunityService
                 if (pending is null || DateTime.UtcNow - pending.LastUtc > TimeSpan.FromMinutes(1))
                 {
                     data.SetCounter(steam, "cb_reset_confirm", 1);
-                    await ReplyAsync(def, p, $"EAM: ATTENTION, vous repartirez de zéro (inventaire, niveau, position). Retapez {s.Prefix}reset dans la minute pour confirmer. / You will start again from zero, type it again within a minute to confirm.");
+                    await ReplyAsync(def, p, $"EAM: ATTENTION, vous repartirez de zéro (inventaire, niveau, position). Êtes-vous sûr ? Répondez « oui » (ou retapez {s.Prefix}reset) dans la minute pour confirmer. / Are you sure? Answer \"yes\" within a minute to confirm.");
                     return;
                 }
                 data.DeleteCounter(steam, "cb_reset_confirm");
                 data.SetCounter(steam, "cb_reset", (used?.Count ?? 0) + 1);
                 data.PlayerEvent(steam, p.Name, "chatbot_reset", "", "chatbot");
-                await ReplyAsync(def, p, "EAM: reset dans 10 s, reconnectez-vous ensuite / reset in 10 s, log in again afterwards");
+                await ReplyAsync(def, p, "EAM: reset dans 10 s, reconnectez-vous dans 1 min / reset in 10 s, log in again in 1 min");
                 _ = Task.Run(async () =>
                 {
                     try
                     {
                         await Task.Delay(TimeSpan.FromSeconds(10));
-                        await _manager.ConsoleAsync(def.Id, $"kick {p.Id} 'CB:reset'", "EAM chatbot");
-                        // The game writes the player file when they leave: wait for it, then move it aside.
-                        for (var i = 0; i < 30 && _live.OnlineBySteam(def.Id, steam) is not null; i++) await Task.Delay(TimeSpan.FromSeconds(2));
-                        await Task.Delay(TimeSpan.FromSeconds(5));
-                        var file = PlayerService.PlayerFile(def, steam);
-                        if (File.Exists(file))
-                        {
-                            var aside = Path.Combine(def.EamDir, "players-removed", DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-reset");
-                            Directory.CreateDirectory(aside);
-                            File.Move(file, Path.Combine(aside, Path.GetFileName(file)));
-                        }
+                        await _players.ResetCharacterAsync(def.Id, steam, p.Name + " (CB:reset)");
                     }
-                    catch (Exception e) { _log.LogWarning("CB:reset of {Name} failed: {Err}", p.Name, e.Message); }
+                    catch (Exception e)
+                    {
+                        _log.LogWarning("CB:reset of {Name} failed: {Err}", p.Name, e.Message);
+                        ServerManager.ServerLog(def, $"CB:reset of {p.Name} failed: {e.Message}");
+                    }
                 });
                 break;
             }
