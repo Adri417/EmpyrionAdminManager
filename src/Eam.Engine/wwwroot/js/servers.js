@@ -16,7 +16,7 @@ extend({
     srv_create: "Créer et installer", srv_ports_hint: "Ports proposés automatiquement et vérifiés : aucun autre serveur ni programme ne les utilise.",
     state_NotInstalled: "Non installé", state_Installing: "Installation", state_Updating: "Mise à jour", state_Stopped: "Arrêté",
     state_Starting: "Démarrage", state_Running: "En ligne", state_Stopping: "Arrêt", state_Crashed: "Planté",
-    act_start: "Démarrer", act_stop: "Arrêter", act_restart: "Redémarrer", act_kill: "Forcer l'arrêt", act_update: "Mettre à jour",
+    act_start: "Démarrer", act_stop: "Arrêter", act_restart: "Redémarrer", act_kill: "Forcer l'arrêt", act_update: "Mettre à jour", update_running_confirm: "Le serveur tourne : les joueurs reçoivent une alerte rouge et sont kickés dans 1 minute, puis EAM sauvegarde, arrête le serveur, fait une copie de sécurité, met le jeu à jour et le redémarre. Continuer ?",
     act_validate: "Vérifier les fichiers", act_rename: "Renommer", act_delete: "Supprimer", act_cancel_stop: "Annuler l'arrêt",
     act_resume: "Réactiver le redémarrage auto", act_open: "Ouvrir", act_install: "Installer",
     tab_overview: "Vue d'ensemble", tab_console: "Console", tab_settings: "Réglages", tab_logs: "Journaux",
@@ -53,7 +53,7 @@ extend({
     srv_create: "Create and install", srv_ports_hint: "Ports suggested automatically and checked: no other server or program uses them.",
     state_NotInstalled: "Not installed", state_Installing: "Installing", state_Updating: "Updating", state_Stopped: "Stopped",
     state_Starting: "Starting", state_Running: "Online", state_Stopping: "Stopping", state_Crashed: "Crashed",
-    act_start: "Start", act_stop: "Stop", act_restart: "Restart", act_kill: "Force stop", act_update: "Update",
+    act_start: "Start", act_stop: "Stop", act_restart: "Restart", act_kill: "Force stop", act_update: "Update", update_running_confirm: "The server is running: players get a red alert and are kicked in 1 minute, then EAM saves, stops the server, makes a backup, updates the game and starts it again. Continue?",
     act_validate: "Verify files", act_rename: "Rename", act_delete: "Delete", act_cancel_stop: "Cancel stop",
     act_resume: "Re-enable auto restart", act_open: "Open", act_install: "Install",
     tab_overview: "Overview", tab_console: "Console", tab_settings: "Settings", tab_logs: "Logs",
@@ -262,7 +262,7 @@ export async function renderServerDetail(page, id, setTitle) {
     const b = [];
     if (!s.installed && owner) b.push(["install", "act_install", "primary"]);
     if (s.installed && ["Stopped", "Crashed"].includes(s.state)) b.push(["start", "act_start", "primary"]);
-    if (["Running", "Starting"].includes(s.state)) b.push(["stop", "act_stop", ""], ["restart", "act_restart", ""]);
+    if (["Running", "Starting"].includes(s.state)) b.push(["stop", "act_stop", ""], ["restart", "act_restart", ""], ["update", "act_update", ""]);
     if (s.state === "Stopping" && s.operation) b.push(["cancel-stop", "act_cancel_stop", ""]);
     if (s.installed && ["Stopped", "Crashed"].includes(s.state)) b.push(["update", "act_update", ""], ["validate", "act_validate", ""]);
     if (["Running", "Starting", "Stopping", "Crashed"].includes(s.state)) b.push(["kill", "act_kill", "danger"]);
@@ -277,6 +277,7 @@ export async function renderServerDetail(page, id, setTitle) {
 
   const act = async (a, s) => {
     try {
+      if (a === "update" && ["Running", "Starting"].includes(s.state) && !confirm(t("update_running_confirm"))) return;
       if (a === "install" || a === "update") await api.post(`/api/servers/${id}/${a === "install" ? "validate" : "update"}`);
       else if (a === "validate") await api.post(`/api/servers/${id}/validate`);
       else if (a === "start") await api.post(`/api/servers/${id}/start`);

@@ -146,6 +146,21 @@ public sealed class ServerManager : BackgroundService
 
     public SteamCmd Steam => _steam;
 
+    /// <summary>
+    /// The build really installed (Steam's appmanifest in the game folder): the game may have been updated
+    /// outside EAM (SteamCMD by hand). The definition is corrected when it differs.
+    /// </summary>
+    public string? InstalledBuild(ServerDefinition def)
+    {
+        var real = SteamCmd.ReadBuildId(def.GameDir);
+        if (real is { Length: > 0 } && real != def.BuildId)
+        {
+            _store.Update(def with { BuildId = real });
+            ServerLog(def, $"Installed game build is {real} (was recorded as {def.BuildId ?? "?"})");
+        }
+        return real ?? def.BuildId;
+    }
+
     // ------------------------------------------------------------------ create / rename / settings / delete
 
     public async Task<ServerDefinition> CreateAsync(CreateServerRequest req, string by)
@@ -424,6 +439,21 @@ public sealed class ServerManager : BackgroundService
     }
 
     // ------------------------------------------------------------------ install / update
+
+    /// <summary>
+    /// "Update" button: a stopped server is updated at once; a running one is warned 1 minute (red alert, kick),
+    /// saved and stopped, backed up, updated, then started again.
+    /// </summary>
+    public Task UpdateGameAsync(long id, BackupService backups, string by)
+    {
+        var rt = Runtime(id);
+        if (rt.State is not (ServerState.Running or ServerState.Starting)) return InstallAsync(id, false, by);
+        return RestartWithAsync(id, 1, "Mise a jour du jeu / Game update", by, "update", async (d, r) =>
+        {
+            await backups.CreateAsync(d.Id, "before-update", by);
+            await UpdateFilesAsync(d, r, by);
+        });
+    }
 
     public Task InstallAsync(long id, bool validate, string by) => WithLock(id, validate ? "validate" : "install", async (def, rt) =>
     {

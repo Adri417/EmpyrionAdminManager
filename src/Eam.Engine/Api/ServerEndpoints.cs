@@ -32,7 +32,8 @@ public static class ServerEndpoints
             Run(async () => { await m.DeleteAsync(id, req.DeleteFiles, req.ConfirmName, By(c)); return Ok; })).RequireAuthorization(Roles.Owner);
 
         // Long operations run in the background; progress arrives over the live socket.
-        g.MapPost("/{id:long}/update", (long id, ServerManager m, HttpContext c) => Background(m, id, () => m.InstallAsync(id, false, By(c)))).RequireAuthorization(Roles.Admin);
+        // On a running server: 1 minute warning (red alert, kick), backup, update, restart. Stopped: update only.
+        g.MapPost("/{id:long}/update", (long id, ServerManager m, BackupService b, HttpContext c) => Background(m, id, () => m.UpdateGameAsync(id, b, By(c)))).RequireAuthorization(Roles.Admin);
         g.MapPost("/{id:long}/validate", (long id, ServerManager m, HttpContext c) => Background(m, id, () => m.InstallAsync(id, true, By(c)))).RequireAuthorization(Roles.Admin);
         g.MapPost("/{id:long}/start", (long id, ServerManager m, HttpContext c) =>
             Run(async () => { await m.StartAsync(id, By(c)); return Ok; })).RequireAuthorization(Roles.Admin);

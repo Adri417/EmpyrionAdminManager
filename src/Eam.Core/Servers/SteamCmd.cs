@@ -64,8 +64,10 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
                     throw new InvalidOperationException(lastError ?? $"steamcmd_exit_{code}");
                 log?.Invoke($"SteamCMD exited with code {code}, retrying ({attempt}/3)");
                 // "Failed to get manifest request code, 'Access Denied'" / "state 0x6": a stale SteamCMD cache or a
-                // half-done download from an earlier attempt. Start the next attempt from a clean state.
+                // half-done download from an earlier attempt. Start the next attempt from a clean state; for the
+                // last attempt, a brand new SteamCMD (a copy that is stuck can keep failing while a fresh one works).
                 ClearCaches(installDir, log);
+                if (attempt == 2) await ReinstallAsync(progress, log, ct);
             }
         }
         finally { Gate.Release(); }
@@ -154,6 +156,21 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
         if (!File.Exists(manifest)) return null;
         var m = BuildIdRegex().Match(File.ReadAllText(manifest));
         return m.Success ? m.Groups[1].Value : null;
+    }
+
+    /// <summary>Deletes this SteamCMD and downloads a fresh one (only SteamCMD's own folder is touched).</summary>
+    private async Task ReinstallAsync(IProgress<SteamProgress>? progress, Action<string>? log, CancellationToken ct)
+    {
+        try
+        {
+            foreach (var f in Directory.EnumerateFileSystemEntries(steamCmdDir))
+            {
+                if (Directory.Exists(f)) Directory.Delete(f, true); else File.Delete(f);
+            }
+            log?.Invoke("SteamCMD removed, downloading a fresh copy");
+            await EnsureInstalledAsync(progress, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException) { log?.Invoke("SteamCMD reinstall failed: " + e.Message); }
     }
 
     /// <summary>

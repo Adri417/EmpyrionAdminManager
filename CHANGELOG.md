@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.32 (2026-11-12) - Mises à jour du jeu fiables
+- Bouton « Mettre à jour » : il fonctionne aussi serveur en marche. Les joueurs reçoivent une alerte rouge et sont kickés à 1 minute, puis EAM sauvegarde, arrête le serveur, fait une copie de sécurité, met le jeu à jour et redémarre le serveur.
+- SteamCMD : si une mise à jour échoue, EAM vide les caches de SteamCMD, puis pour le dernier essai réinstalle une copie neuve de SteamCMD (une copie bloquée peut échouer sans fin alors qu'une neuve fonctionne).
+- Mise à jour automatique : Steam est vérifié toutes les 10 minutes (au lieu de toutes les heures). Une mise à jour qui échoue est retentée aux vérifications suivantes (3 essais au plus), au lieu d'être abandonnée. Le serveur est toujours redémarré, même si la mise à jour échoue.
+- La version du jeu installée est relue dans les fichiers du jeu : une mise à jour faite en dehors d'EAM (SteamCMD à la main) est reconnue, sans mise à jour en double.
+
 ## 0.9.31 (2026-11-12) - Mise à jour du jeu depuis EAM
 - Corrigé : la mise à jour du jeu depuis EAM pouvait échouer à chaque essai (« Failed to get manifest request code, 'Access Denied' », « state 0x6 »). Entre deux essais, EAM vide maintenant les caches de SteamCMD et le téléchargement inachevé du jeu (rien du jeu installé ni des sauvegardes n'est touché), puis réessaie.
 
