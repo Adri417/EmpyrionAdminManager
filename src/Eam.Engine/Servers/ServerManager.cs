@@ -444,11 +444,22 @@ public sealed class ServerManager : BackgroundService
     /// "Update" button: a stopped server is updated at once; a running one is warned 1 minute (red alert, kick),
     /// saved and stopped, backed up, updated, then started again.
     /// </summary>
-    public Task UpdateGameAsync(long id, BackupService backups, string by)
+    /// <summary>A running server already on Steam's latest build: the update button must not kick the players for nothing.</summary>
+    public async Task<string?> RunningAndUpToDateAsync(long id)
+    {
+        if (Runtime(id).State is not (ServerState.Running or ServerState.Starting)) return null;
+        var def = Get(id);
+        Dictionary<string, string> latest;
+        try { latest = new(await _steam.CheckLatestBuildsAsync(CancellationToken.None)); }
+        catch { return null; } // Steam not reachable: the update itself will tell
+        return latest.TryGetValue(def.Branch, out var newest) && InstalledBuild(def) == newest ? newest : null;
+    }
+
+    public async Task UpdateGameAsync(long id, BackupService backups, string by)
     {
         var rt = Runtime(id);
-        if (rt.State is not (ServerState.Running or ServerState.Starting)) return InstallAsync(id, false, by);
-        return RestartWithAsync(id, 1, "Mise a jour du jeu / Game update", by, "update", async (d, r) =>
+        if (rt.State is not (ServerState.Running or ServerState.Starting)) { await InstallAsync(id, false, by); return; }
+        await RestartWithAsync(id, 1, "Mise a jour du jeu / Game update", by, "update", async (d, r) =>
         {
             await backups.CreateAsync(d.Id, "before-update", by);
             await UpdateFilesAsync(d, r, by);

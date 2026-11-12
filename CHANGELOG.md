@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.33 (2026-11-12) - Bouton « Mettre à jour » sans risque
+- Bouton « Mettre à jour » sur un serveur en marche déjà à jour sur Steam : rien n'est fait (pas de redémarrage, les joueurs ne sont pas kickés). EAM affiche « déjà à jour ».
+
 ## 0.9.32 (2026-11-12) - Mises à jour du jeu fiables
 - Bouton « Mettre à jour » : il fonctionne aussi serveur en marche. Les joueurs reçoivent une alerte rouge et sont kickés à 1 minute, puis EAM sauvegarde, arrête le serveur, fait une copie de sécurité, met le jeu à jour et redémarre le serveur.
 - SteamCMD : si une mise à jour échoue, EAM vide les caches de SteamCMD, puis pour le dernier essai réinstalle une copie neuve de SteamCMD (une copie bloquée peut échouer sans fin alors qu'une neuve fonctionne).

@@ -33,7 +33,10 @@ public static class ServerEndpoints
 
         // Long operations run in the background; progress arrives over the live socket.
         // On a running server: 1 minute warning (red alert, kick), backup, update, restart. Stopped: update only.
-        g.MapPost("/{id:long}/update", (long id, ServerManager m, BackupService b, HttpContext c) => Background(m, id, () => m.UpdateGameAsync(id, b, By(c)))).RequireAuthorization(Roles.Admin);
+        g.MapPost("/{id:long}/update", async (long id, ServerManager m, BackupService b, HttpContext c) =>
+            await m.RunningAndUpToDateAsync(id) is { } build
+                ? Results.BadRequest(new { error = "already_up_to_date", detail = build })
+                : Background(m, id, () => m.UpdateGameAsync(id, b, By(c)))).RequireAuthorization(Roles.Admin);
         g.MapPost("/{id:long}/validate", (long id, ServerManager m, HttpContext c) => Background(m, id, () => m.InstallAsync(id, true, By(c)))).RequireAuthorization(Roles.Admin);
         g.MapPost("/{id:long}/start", (long id, ServerManager m, HttpContext c) =>
             Run(async () => { await m.StartAsync(id, By(c)); return Ok; })).RequireAuthorization(Roles.Admin);
