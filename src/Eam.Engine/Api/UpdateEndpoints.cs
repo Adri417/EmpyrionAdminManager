@@ -25,8 +25,11 @@ public static class UpdateEndpoints
             u.Save(s);
             return Results.Ok(u.Status());
         }).RequireAuthorization(Roles.Owner);
-        app.MapPost("/api/update/apply", async (UpdateService u, HttpContext c) =>
+        app.MapPost("/api/update/apply", async (UpdateService u, ServerManager m, HttpContext c) =>
         {
+            // Restarting EAM would cut a copy, an installation or a game update in progress.
+            if (m.Definitions().FirstOrDefault(d => m.Runtime(d.Id).State == ServerState.Installing) is { } busy)
+                return Results.BadRequest(new { error = "update_server_busy", detail = busy.Name });
             try { return Results.Ok(await u.ApplyAsync(c.User.Identity?.Name ?? "?")); }
             catch (ServerException e) { return Results.BadRequest(new { error = e.Code, detail = e.Detail }); }
             catch (Exception e) when (e is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException)
