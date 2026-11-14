@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.35 (2026-11-14) - Mise à jour du jeu : 5 minutes de préavis
+- Bouton « Mettre à jour » sur un serveur en marche : les joueurs ont maintenant 5 minutes de préavis (alertes rouges comme pour un redémarrage programmé) au lieu d'1 minute. La mise à jour automatique gardait déjà 5 minutes.
+
 ## 0.9.34 (2026-11-13) - Recommencer la survie à zéro
 - Corrigé : CB:reset et le bouton « Recommencer la survie à zéro » ne remettaient pas vraiment le joueur à zéro (il revenait avec ses affaires). Maintenant : le joueur est kické, EAM attend que le jeu ait fini d'écrire son fichier, puis le supprime (une copie est gardée dans eam\players-removed). S'il se reconnecte pendant le reset, il est kické de nouveau. Si ça rate, EAM affiche une erreur au lieu de « ok ».
 - Le fichier du joueur est cherché dans le vrai dossier de sauvegarde du serveur (SaveDirectory du dedicated.yaml).

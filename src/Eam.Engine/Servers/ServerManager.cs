@@ -459,7 +459,7 @@ public sealed class ServerManager : BackgroundService
     {
         var rt = Runtime(id);
         if (rt.State is not (ServerState.Running or ServerState.Starting)) { await InstallAsync(id, false, by); return; }
-        await RestartWithAsync(id, 1, "Mise a jour du jeu / Game update", by, "update", async (d, r) =>
+        await RestartWithAsync(id, 5, "Mise a jour du jeu / Game update", by, "update", async (d, r) =>
         {
             await backups.CreateAsync(d.Id, "before-update", by);
             await UpdateFilesAsync(d, r, by);
