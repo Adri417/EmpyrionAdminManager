@@ -64,7 +64,7 @@ export function importDialog(servers) {
     try { preview = await api.post("/api/import/preview", { path: f.path.value }); } catch (ex) { err(ex); return; }
     const p = preview;
     mount($("#im-res", dlg), html`
-      ${p.gameDir ? html`<div><span class="state ok">${t("imp_found_game")}</span> <span class="hint">${p.gameDir} · ${formatBytes(p.size)}${p.port ? ` · port ${p.port}` : ""}</span></div>` : ""}
+      ${p.gameDir ? html`<div><span class="state ok">${t("imp_found_game")}</span> <span class="hint">${p.gameDir}${p.size ? ` · ${formatBytes(p.size)}` : ""}${p.port ? ` · port ${p.port}` : ""}</span></div>` : ""}
       ${p.configDir ? html`<div><span class="state ok">${t("imp_found_eah")}</span> <span class="hint">${p.configDir}</span></div><div class="hint">${counts(p.counts)}</div>`
         : html`<div class="hint">${t("imp_no_eah")}</div>`}
       <label>${t("imp_mode")}</label>
@@ -76,7 +76,7 @@ export function importDialog(servers) {
         <label>${t("rn_display")}</label><input name="displayName" maxlength="100" value="${p.name || p.eah?.serverName || ""}">
         <div class="hint">${t("rn_display_hint")}</div>
         <div data-copy><label>${t("imp_folder")}</label><input name="folder" value="${p.serversFolder || ""}">
-          <div class="hint">${t("imp_folder_hint", formatBytes(p.size || 0), p.freeBytes != null ? formatBytes(p.freeBytes) : "?")}</div></div></div>
+          <div class="hint">${t("imp_folder_hint", p.size ? formatBytes(p.size) : "?", p.freeBytes != null ? formatBytes(p.freeBytes) : "?")}</div></div></div>
       ${p.configDir ? html`<details><summary>${t("imp_what")}</summary>
         ${[["players", "imp_o_players"], ["chat", "imp_o_chat"], ["history", "imp_o_history"], ["inventories", "imp_o_inv"], ["structures", "imp_o_structures"],
           ["statistics", "imp_o_stats"], ["settings", "imp_o_settings"], ["tasks", "imp_o_tasks"], ["templates", "imp_o_templates"]]

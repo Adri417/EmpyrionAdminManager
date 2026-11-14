@@ -261,23 +261,27 @@ public sealed class ServerManager : BackgroundService
                 await BroadcastListAsync();
                 return def;
             }
-            long needed = 0;
-            try { needed = new DirectoryInfo(gameDir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length); } catch { }
-            if (FreeBytes(root) is { } free && free < needed + 2L * 1024 * 1024 * 1024)
-            {
-                _store.Remove(def.Id);
-                try { Directory.Delete(root, true); } catch { }
-                throw new ServerException("not_enough_space", $"{needed / 1_073_741_824.0:0.0} GB / {free / 1_073_741_824.0:0.0} GB");
-            }
             rt.State = ServerState.Installing;
             rt.Progress = 0;
             rt.ProgressText = "copy";
             await BroadcastListAsync();
+            // Everything long (measuring and copying millions of files) runs in the background: the web request
+            // answers at once and the progress is shown in the server list.
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    var skipped = await Task.Run(() => CopyTree(gameDir, def.GameDir, rt));
+                    ServerLog(def, $"Copy of {gameDir}: listing the files");
+                    rt.ProgressText = "copy_listing";
+                    _ = BroadcastListAsync();
+                    var files = await Task.Run(() => new DirectoryInfo(gameDir).EnumerateFiles("*", SearchOption.AllDirectories).ToList());
+                    var needed = files.Sum(f => f.Length);
+                    if (FreeBytes(root) is { } free && free < needed + 2L * 1024 * 1024 * 1024)
+                        throw new ServerException("not_enough_space", $"{needed / 1_073_741_824.0:0.0} GB / {free / 1_073_741_824.0:0.0} GB");
+                    ServerLog(def, $"Copy of {gameDir}: {files.Count} files, {needed / 1_073_741_824.0:0.0} GB");
+                    rt.ProgressText = "copy";
+                    var skipped = await Task.Run(() => CopyTree(gameDir, def.GameDir, files, needed, rt));
+                    files = null;
                     // Paths of the old server written in its yaml (save folder...) now point into the copy:
                     // the copy must never play on the original's save.
                     foreach (var key in new[] { "SaveDirectory" })
@@ -307,6 +311,7 @@ public sealed class ServerManager : BackgroundService
                 }
                 catch (Exception e)
                 {
+                    if (e is AggregateException ae) e = ae.Flatten().InnerExceptions.First();
                     rt.State = ServerState.NotInstalled;
                     rt.LastError = e is ServerException se ? $"{se.Code}: {se.Detail}" : "copy_failed: " + e.Message;
                     ServerLog(def, "Copy failed: " + rt.LastError);
@@ -324,26 +329,31 @@ public sealed class ServerManager : BackgroundService
     }
 
     /// <summary>Copies a whole server folder. Files Windows does not let EAM read are left out and returned.</summary>
-    private List<string> CopyTree(string from, string to, ServerRuntime rt)
+    /// <summary>
+    /// Copies the files (several at a time: a save can hold millions of small files). Progress by size.
+    /// </summary>
+    private List<string> CopyTree(string from, string to, List<FileInfo> files, long totalBytes, ServerRuntime rt)
     {
-        var skipped = new List<string>();
-        var files = new DirectoryInfo(from).EnumerateFiles("*", SearchOption.AllDirectories).ToList();
-        var total = Math.Max(1, files.Sum(f => f.Length));
+        var skipped = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var total = Math.Max(1, totalBytes);
         long done = 0;
-        var lastPush = DateTime.UtcNow;
-        foreach (var f in files)
+        var lastPush = DateTime.UtcNow.Ticks;
+        // Folders first (once each), then the files in parallel.
+        foreach (var dir in files.Select(f => Path.GetDirectoryName(Path.Combine(to, Path.GetRelativePath(from, f.FullName)))!).Distinct(StringComparer.OrdinalIgnoreCase))
+            Directory.CreateDirectory(dir);
+        Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 8 }, (f, state) =>
         {
             var rel = Path.GetRelativePath(from, f.FullName);
-            var target = Path.Combine(to, rel);
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            try { f.CopyTo(target, overwrite: true); }
+            try { f.CopyTo(Path.Combine(to, rel), overwrite: true); }
             catch (UnauthorizedAccessException) { skipped.Add(rel); }
             catch (IOException e) { throw new ServerException("copy_failed", $"{rel}: {e.Message}"); }
-            done += f.Length;
-            rt.Progress = Math.Round(done * 100.0 / total, 1);
-            if (DateTime.UtcNow - lastPush > TimeSpan.FromSeconds(1)) { lastPush = DateTime.UtcNow; _ = BroadcastListAsync(); }
-        }
-        return skipped;
+            var d = Interlocked.Add(ref done, f.Length);
+            rt.Progress = Math.Round(d * 100.0 / total, 1);
+            var now = DateTime.UtcNow.Ticks;
+            var last = Interlocked.Read(ref lastPush);
+            if (now - last > TimeSpan.TicksPerSecond && Interlocked.CompareExchange(ref lastPush, now, last) == last) _ = BroadcastListAsync();
+        });
+        return skipped.ToList();
     }
 
     public async Task RenameAsync(long id, string newName, string by, string? displayName = null)

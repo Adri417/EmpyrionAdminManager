@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.36 (2026-11-14) - Import des très gros serveurs
+- Corrigé : « Analyser » ne répondait jamais pour un serveur avec une très grosse sauvegarde (RE1 : 2,3 millions de fichiers, 9 minutes rien que pour les lister ; la page était coupée avant). L'analyse répond maintenant tout de suite.
+- La copie mesure la taille et vérifie la place libre en arrière-plan, puis copie plusieurs fichiers à la fois. L'avancement est affiché dans la liste des serveurs.
+- Chaque refus ou erreur d'import est aussi écrit dans le journal d'EAM.
+
 ## 0.9.35 (2026-11-14) - Mise à jour du jeu : 5 minutes de préavis
 - Bouton « Mettre à jour » sur un serveur en marche : les joueurs ont maintenant 5 minutes de préavis (alertes rouges comme pour un redémarrage programmé) au lieu d'1 minute. La mise à jour automatique gardait déjà 5 minutes.
 

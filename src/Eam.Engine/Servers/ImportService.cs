@@ -53,9 +53,9 @@ public sealed class ImportService(ServerManager manager, LiveService live, EamPa
                 catch { /* shown without the name */ }
             }
         }
-        long size = 0;
-        if (gameDir is not null)
-            try { size = new DirectoryInfo(gameDir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length); } catch { }
+        // No walk through every file here: a big save has millions of files (RE1: 2.3 million, 9 minutes just to
+        // list them) and the analysis must answer at once. The size is measured in the background at copy time.
+        long? size = null;
         var existing = gameDir is null ? null : manager.Definitions().FirstOrDefault(d => ServerManager.IsUnder(d.GameDir, gameDir) && ServerManager.IsUnder(gameDir, d.GameDir));
         return new
         {
