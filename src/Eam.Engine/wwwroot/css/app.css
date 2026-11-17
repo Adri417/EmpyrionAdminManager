@@ -271,3 +271,6 @@ tr.row-online { outline: 1px solid color-mix(in srgb, var(--ok) 55%, transparent
 .inv-slot .inv-name { font-size: 10px; line-height: 1.1; text-align: center; padding: 2px; word-break: break-word; opacity: .85; }
 .inv-slot img + .inv-name { display: none; }
 .inv-slot .inv-count { position: absolute; right: 3px; bottom: 1px; font-size: 12px; text-shadow: 0 0 3px #000, 0 0 3px #000; color: #fff; }
+
+/* Import box at the top of the "Add a server" dialog */
+.card.inset { margin: 8px 0 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }

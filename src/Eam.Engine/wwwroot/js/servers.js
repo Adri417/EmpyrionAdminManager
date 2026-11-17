@@ -8,7 +8,7 @@ import { featureTabs, isFeatureTab, renderFeature, featureEvent } from "./featur
 
 extend({
   fr: {
-    srv_new: "Nouveau serveur", srv_name: "Nom du serveur", srv_name_hint: "Affiché dans EAM et dans la liste des serveurs du jeu. Sert aussi à nommer son dossier. Modifiable plus tard.",
+    srv_game: "Jeu", srv_game_soon: "bientôt", srv_import_hint: "Le serveur existe déjà (avec EAH ou non) ? Importez-le avec toutes ses données.", srv_new_settings: "Ou installer un nouveau serveur", srv_new: "Ajouter un serveur", srv_name: "Nom du serveur", srv_name_hint: "Affiché dans EAM et dans la liste des serveurs du jeu. Sert aussi à nommer son dossier. Modifiable plus tard.",
     srv_game_port: "Port de jeu (+3 suivants)", srv_telnet_port: "Port telnet (interne)", srv_max_players: "Joueurs max",
     srv_password: "Mot de passe pour rejoindre (optionnel)", srv_description: "Description", srv_branch: "Version du jeu",
     branch_public: "Stable (public)", branch_experimental: "Expérimentale", srv_public: "Visible dans la liste publique des serveurs",
@@ -45,7 +45,7 @@ extend({
     err_invalid_max_players: "Joueurs max : 1 à 200.", err_stop_cancelled: "Arrêt annulé.", err_unsafe_delete: "Suppression refusée : dossier hors d'EAM.",
   },
   en: {
-    srv_new: "New server", srv_name: "Server name", srv_name_hint: "Shown in EAM and in the game's server list. Also names its folder. Can be changed later.",
+    srv_game: "Game", srv_game_soon: "coming soon", srv_import_hint: "The server already exists (with EAH or not)? Import it with all its data.", srv_new_settings: "Or install a new server", srv_new: "Add a server", srv_name: "Server name", srv_name_hint: "Shown in EAM and in the game's server list. Also names its folder. Can be changed later.",
     srv_game_port: "Game port (+3 next)", srv_telnet_port: "Telnet port (internal)", srv_max_players: "Max players",
     srv_password: "Join password (optional)", srv_description: "Description", srv_branch: "Game version",
     branch_public: "Stable (public)", branch_experimental: "Experimental", srv_public: "Listed in the public server list",
@@ -149,7 +149,7 @@ export async function renderServerList(page) {
   const canCreate = atLeast(store.me.role, "owner");
   const draw = () => {
     mount(page, html`
-      ${canCreate ? html`<div><button class="btn primary" id="new">+ ${t("srv_new")}</button> <button class="btn" id="imp">⇪ ${t("imp_button")}</button></div>` : ""}
+      ${canCreate ? html`<div><button class="btn primary" id="new">+ ${t("srv_new")}</button></div>` : ""}
       ${store.servers.length === 0
         ? html`<div class="card"><div class="empty"><div class="big">▣</div><b>${t("servers_empty_title")}</b><div>${t("no_server_yet")}</div></div></div>`
         : html`<div class="grid servers">${store.servers.map((s) => html`
@@ -161,7 +161,6 @@ export async function renderServerList(page) {
           </a>`)}</div>`}`);
     applyBars(page);
     $("#new", page)?.addEventListener("click", () => createDialog());
-    $("#imp", page)?.addEventListener("click", () => importDialog(store.servers));
   };
   store.onChange = draw;
   draw();
@@ -174,6 +173,12 @@ async function createDialog() {
   const dlg = document.createElement("dialog");
   mount(dlg, html`<form method="dialog" id="cf">
     <h3>${t("srv_new")}</h3>
+    <label>${t("srv_game")}</label><select name="game">
+      <option value="empyrion">Empyrion - Galactic Survival</option>
+      <option value="vsl" disabled>Vita Somnium Life (${t("srv_game_soon")})</option></select>
+    <div class="card inset"><div class="hint">${t("srv_import_hint")}</div>
+      <button type="button" class="btn" id="cimp">⇪ ${t("imp_button")}</button></div>
+    <h4>${t("srv_new_settings")}</h4>
     <label>${t("srv_name")}</label><input name="name" type="text" required minlength="2" maxlength="60" autofocus>
     <div class="hint">${t("srv_name_hint")}</div>
     <div class="form-row">
@@ -195,6 +200,7 @@ async function createDialog() {
       <button class="btn primary" value="ok">${t("srv_create")}</button></div></form>`);
   document.body.appendChild(dlg);
   const f = $("#cf", dlg);
+  $("#cimp", dlg).addEventListener("click", () => { dlg.close(); importDialog(store.servers); });
   f.addEventListener("submit", async (e) => {
     if (e.submitter?.value === "cancel") { dlg.close(); return; }
     e.preventDefault();
