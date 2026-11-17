@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.39 (2026-11-17) - Vita Somnium Life
+- Nouveau jeu : **Vita Somnium Life**. « Ajouter un serveur » > Jeu « Vita Somnium Life » : EAM l'installe avec SteamCMD (app 5164760), écrit server_config.json (nom, port de jeu, port de requête Steam, joueurs max, mot de passe) et databaseinfo.json (base MySQL à créer avant, vide).
+- Démarrage, arrêt propre (EAM tape « stop » dans la console du serveur), redémarrage après plantage, console et journal du jeu.
+- Mise à jour automatique : Steam est vérifié toutes les 10 minutes ; une nouvelle version arrête le serveur, le met à jour et le relance.
+- Joueurs max : jusqu'à 1000.
+
 ## 0.9.38 (2026-11-17) - Easy Admin Manager
 - Le logiciel s'appelle maintenant **Easy Admin Manager** (toujours EAM). Le nom des fichiers, du service Windows et des mises à jour ne change pas : rien à refaire sur un serveur déjà installé.
 

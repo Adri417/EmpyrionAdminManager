@@ -7,7 +7,7 @@ namespace Eam.Core.Servers;
 /// <summary>List of the servers managed by EAM (general database).</summary>
 public sealed class ServerStore(Database db)
 {
-    private const string Columns = "id, slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key, game_dir, display_name";
+    private const string Columns = "id, slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key, game_dir, display_name, game";
 
     public IReadOnlyList<ServerDefinition> List()
     {
@@ -27,8 +27,8 @@ public sealed class ServerStore(Database db)
         using var c = db.Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO servers (slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key, game_dir, display_name)
-            VALUES ($slug, $name, $root, $gp, $tp, $tpw, $branch, $as, $ar, $inst, $build, $created, $mk, $gd, $dn) RETURNING id;
+            INSERT INTO servers (slug, name, root_dir, game_port, telnet_port, telnet_password, branch, auto_start, auto_restart, installed, build_id, created_utc, mod_key, game_dir, display_name, game)
+            VALUES ($slug, $name, $root, $gp, $tp, $tpw, $branch, $as, $ar, $inst, $build, $created, $mk, $gd, $dn, $game) RETURNING id;
             """;
         Bind(cmd, s);
         cmd.Parameters.AddWithValue("$created", DateTime.UtcNow.ToString("O"));
@@ -75,6 +75,7 @@ public sealed class ServerStore(Database db)
         cmd.Parameters.AddWithValue("$mk", s.ModKey ?? "");
         cmd.Parameters.AddWithValue("$gd", (object?)s.GameDirOverride ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$dn", string.IsNullOrWhiteSpace(s.DisplayName) ? DBNull.Value : s.DisplayName);
+        cmd.Parameters.AddWithValue("$game", GameKinds.Normalize(s.Game));
     }
 
     private static ServerDefinition Map(SqliteDataReader r) => new()
@@ -95,5 +96,6 @@ public sealed class ServerStore(Database db)
         ModKey = r.GetString(13),
         GameDirOverride = r.IsDBNull(14) ? null : r.GetString(14),
         DisplayName = r.IsDBNull(15) ? null : r.GetString(15),
+        Game = GameKinds.Normalize(r.GetString(16)),
     };
 }

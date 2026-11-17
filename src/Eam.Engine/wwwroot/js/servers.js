@@ -8,8 +8,8 @@ import { featureTabs, isFeatureTab, renderFeature, featureEvent } from "./featur
 
 extend({
   fr: {
-    srv_game: "Jeu", srv_game_soon: "bientôt", srv_import_hint: "Le serveur existe déjà (avec EAH ou non) ? Importez-le avec toutes ses données.", srv_new_settings: "Ou installer un nouveau serveur", srv_new: "Ajouter un serveur", srv_name: "Nom du serveur", srv_name_hint: "Affiché dans EAM et dans la liste des serveurs du jeu. Sert aussi à nommer son dossier. Modifiable plus tard.",
-    srv_game_port: "Port de jeu (+3 suivants)", srv_telnet_port: "Port telnet (interne)", srv_max_players: "Joueurs max",
+    srv_game: "Jeu", srv_query_port: "Port de requête Steam (query)", vsl_db: "Base de données MySQL du serveur", vsl_db_hint: "Créez d'abord une base vide (par exemple dans phpMyAdmin). EAM l'écrit dans databaseinfo.json ; le mot de passe n'est jamais réaffiché.", vsl_db_host: "Hôte", vsl_db_port: "Port", vsl_db_name: "Nom de la base", vsl_db_user: "Utilisateur", vsl_db_password: "Mot de passe", err_vsl_database_required: "Indiquez le nom de la base MySQL.", err_console_unavailable: "Console indisponible : le serveur a été démarré avant le dernier redémarrage d'EAM. Redémarrez-le depuis EAM.", vsl_console_hint: "Les commandes sont tapées dans la console du serveur Vita Somnium Life ; sa réponse apparaît dans le journal du jeu.", vsl_update_auto: "Mise à jour automatique : Steam est vérifié toutes les 10 minutes ; une nouvelle version arrête le serveur (« stop »), le met à jour et le redémarre.", srv_game_soon: "bientôt", srv_import_hint: "Le serveur existe déjà (avec EAH ou non) ? Importez-le avec toutes ses données.", srv_new_settings: "Ou installer un nouveau serveur", srv_new: "Ajouter un serveur", srv_name: "Nom du serveur", srv_name_hint: "Affiché dans EAM et dans la liste des serveurs du jeu. Sert aussi à nommer son dossier. Modifiable plus tard.",
+    srv_game_port: "Port de jeu (+3 suivants)", srv_game_port_single: "Port de jeu (UDP)", srv_telnet_port: "Port telnet (interne)", srv_max_players: "Joueurs max",
     srv_password: "Mot de passe pour rejoindre (optionnel)", srv_description: "Description", srv_branch: "Version du jeu",
     branch_public: "Stable (public)", branch_experimental: "Expérimentale", srv_public: "Visible dans la liste publique des serveurs",
     srv_autostart: "Démarrer avec EAM", srv_autorestart: "Redémarrer automatiquement après un plantage",
@@ -42,11 +42,11 @@ extend({
     err_confirm_name_mismatch: "Le nom tapé ne correspond pas.", err_telnet_failed: "La console du serveur ne répond pas.",
     err_invalid_command: "Commande invalide.", err_steamcmd_windows_only: "SteamCMD ne fonctionne que sous Windows.",
     err_crash_loop: "Plantages en boucle.", err_start_timeout: "Le serveur met très longtemps à démarrer.",
-    err_invalid_max_players: "Joueurs max : 1 à 200.", err_stop_cancelled: "Arrêt annulé.", err_unsafe_delete: "Suppression refusée : dossier hors d'EAM.",
+    err_invalid_max_players: "Joueurs max : 1 à 1000.", err_stop_cancelled: "Arrêt annulé.", err_unsafe_delete: "Suppression refusée : dossier hors d'EAM.",
   },
   en: {
-    srv_game: "Game", srv_game_soon: "coming soon", srv_import_hint: "The server already exists (with EAH or not)? Import it with all its data.", srv_new_settings: "Or install a new server", srv_new: "Add a server", srv_name: "Server name", srv_name_hint: "Shown in EAM and in the game's server list. Also names its folder. Can be changed later.",
-    srv_game_port: "Game port (+3 next)", srv_telnet_port: "Telnet port (internal)", srv_max_players: "Max players",
+    srv_game: "Game", srv_query_port: "Steam query port", vsl_db: "Server MySQL database", vsl_db_hint: "Create an empty database first (for example in phpMyAdmin). EAM writes it into databaseinfo.json; the password is never shown again.", vsl_db_host: "Host", vsl_db_port: "Port", vsl_db_name: "Database name", vsl_db_user: "User", vsl_db_password: "Password", err_vsl_database_required: "Give the MySQL database name.", err_console_unavailable: "Console unavailable: the server was started before EAM's last restart. Restart it from EAM.", vsl_console_hint: "Commands are typed in the Vita Somnium Life server console; its answer shows in the game log.", vsl_update_auto: "Automatic update: Steam is checked every 10 minutes; a new version stops the server (\"stop\"), updates it and starts it again.", srv_game_soon: "coming soon", srv_import_hint: "The server already exists (with EAH or not)? Import it with all its data.", srv_new_settings: "Or install a new server", srv_new: "Add a server", srv_name: "Server name", srv_name_hint: "Shown in EAM and in the game's server list. Also names its folder. Can be changed later.",
+    srv_game_port: "Game port (+3 next)", srv_game_port_single: "Game port (UDP)", srv_telnet_port: "Telnet port (internal)", srv_max_players: "Max players",
     srv_password: "Join password (optional)", srv_description: "Description", srv_branch: "Game version",
     branch_public: "Stable (public)", branch_experimental: "Experimental", srv_public: "Listed in the public server list",
     srv_autostart: "Start with EAM", srv_autorestart: "Restart automatically after a crash",
@@ -79,7 +79,7 @@ extend({
     err_confirm_name_mismatch: "The typed name does not match.", err_telnet_failed: "The server console does not respond.",
     err_invalid_command: "Invalid command.", err_steamcmd_windows_only: "SteamCMD only works on Windows.",
     err_crash_loop: "Crash loop.", err_start_timeout: "The server is taking very long to start.",
-    err_invalid_max_players: "Max players: 1 to 200.", err_stop_cancelled: "Stop cancelled.", err_unsafe_delete: "Delete refused: folder outside EAM.",
+    err_invalid_max_players: "Max players: 1 to 1000.", err_stop_cancelled: "Stop cancelled.", err_unsafe_delete: "Delete refused: folder outside EAM.",
   },
 });
 
@@ -155,7 +155,7 @@ export async function renderServerList(page) {
         : html`<div class="grid servers">${store.servers.map((s) => html`
           <a class="card server-card" href="#/server/${s.id}">
             <div class="server-head"><b>${s.name}</b>${stateBadge(s)}</div>${s.displayName ? html`<div class="hint">${s.displayName}</div>` : ""}
-            <div class="hint">${t("ports")} ${s.gamePort}-${s.gamePort + 3} · ${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}${s.state === "Running" && playerCount(s.id) != null ? ` · ${playerCount(s.id)} ${t("col_players").toLowerCase()}` : ""}</div>
+            <div class="hint">${s.game === "vsl" ? html`Vita Somnium Life · ${t("ports")} ${s.gamePort}/${s.telnetPort}` : html`${t("ports")} ${s.gamePort}-${s.gamePort + 3} · ${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}`}${s.state === "Running" && playerCount(s.id) != null ? ` · ${playerCount(s.id)} ${t("col_players").toLowerCase()}` : ""}</div>
             ${progressBar(s)}
             ${s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
           </a>`)}</div>`}`);
@@ -175,24 +175,33 @@ async function createDialog() {
     <h3>${t("srv_new")}</h3>
     <label>${t("srv_game")}</label><select name="game">
       <option value="empyrion">Empyrion - Galactic Survival</option>
-      <option value="vsl" disabled>Vita Somnium Life (${t("srv_game_soon")})</option></select>
-    <div class="card inset"><div class="hint">${t("srv_import_hint")}</div>
+      <option value="vsl">Vita Somnium Life</option></select>
+    <div class="card inset" data-only="empyrion"><div class="hint">${t("srv_import_hint")}</div>
       <button type="button" class="btn" id="cimp">⇪ ${t("imp_button")}</button></div>
-    <h4>${t("srv_new_settings")}</h4>
+    <h4 data-only="empyrion">${t("srv_new_settings")}</h4>
     <label>${t("srv_name")}</label><input name="name" type="text" required minlength="2" maxlength="60" autofocus>
     <div class="hint">${t("srv_name_hint")}</div>
     <div class="form-row">
-      <div><label>${t("srv_game_port")}</label><input name="gamePort" type="number" min="1024" max="65530" value="${ports.gamePort}"></div>
-      <div><label>${t("srv_telnet_port")}</label><input name="telnetPort" type="number" min="1024" max="65535" value="${ports.telnetPort}"></div>
+      <div><label id="gplabel">${t("srv_game_port")}</label><input name="gamePort" type="number" min="1024" max="65530" value="${ports.gamePort}"></div>
+      <div><label id="tplabel">${t("srv_telnet_port")}</label><input name="telnetPort" type="number" min="1024" max="65535" value="${ports.telnetPort}"></div>
     </div>
     <div class="hint">${t("srv_ports_hint")}</div>
     <div class="form-row">
-      <div><label>${t("srv_max_players")}</label><input name="maxPlayers" type="number" min="1" max="200" value="8"></div>
-      <div><label>${t("srv_branch")}</label><select name="branch"><option value="public">${t("branch_public")}</option><option value="experimental">${t("branch_experimental")}</option></select></div>
+      <div><label>${t("srv_max_players")}</label><input name="maxPlayers" type="number" min="1" max="1000" value="8"></div>
+      <div data-only="empyrion"><label>${t("srv_branch")}</label><select name="branch"><option value="public">${t("branch_public")}</option><option value="experimental">${t("branch_experimental")}</option></select></div>
     </div>
     <label>${t("srv_password")}</label><input name="password" type="text" maxlength="64" autocomplete="off">
-    <label>${t("srv_description")}</label><input name="description" type="text" maxlength="500">
-    <label class="check"><input name="public" type="checkbox" checked> ${t("srv_public")}</label>
+    <div data-only="vsl" hidden>
+      <h4>${t("vsl_db")}</h4><div class="hint">${t("vsl_db_hint")}</div>
+      <div class="form-row"><div><label>${t("vsl_db_host")}</label><input name="dbHost" type="text" value="127.0.0.1"></div>
+        <div><label>${t("vsl_db_port")}</label><input name="dbPort" type="number" value="3306"></div></div>
+      <div class="form-row"><div><label>${t("vsl_db_name")}</label><input name="dbName" type="text" maxlength="64" value="vsl"></div>
+        <div><label>${t("vsl_db_user")}</label><input name="dbUser" type="text" maxlength="64" value="root"></div></div>
+      <label>${t("vsl_db_password")}</label><input name="dbPassword" type="password" maxlength="128" autocomplete="new-password">
+      <div class="hint">${t("vsl_update_auto")}</div>
+    </div>
+    <div data-only="empyrion"><label>${t("srv_description")}</label><input name="description" type="text" maxlength="500">
+    <label class="check"><input name="public" type="checkbox" checked> ${t("srv_public")}</label></div>
     <label class="check"><input name="autoStart" type="checkbox"> ${t("srv_autostart")}</label>
     <label class="check"><input name="autoRestart" type="checkbox" checked> ${t("srv_autorestart")}</label>
     <div class="error" id="cerr"></div>
@@ -201,6 +210,16 @@ async function createDialog() {
   document.body.appendChild(dlg);
   const f = $("#cf", dlg);
   $("#cimp", dlg).addEventListener("click", () => { dlg.close(); importDialog(store.servers); });
+  const empyrionPorts = { g: f.gamePort.value, t: f.telnetPort.value };
+  f.game.addEventListener("change", () => {
+    const g = f.game.value;
+    $$("[data-only]", dlg).forEach((e) => { e.hidden = e.dataset.only !== g; });
+    $("#tplabel", dlg).textContent = t(g === "vsl" ? "srv_query_port" : "srv_telnet_port");
+    $("#gplabel", dlg).textContent = t(g === "vsl" ? "srv_game_port_single" : "srv_game_port");
+    // Usual ports of each game (still checked by EAM when the server is created).
+    if (g === "vsl") { f.gamePort.value = 4172; f.telnetPort.value = 27016; f.maxPlayers.value = 256; }
+    else { f.gamePort.value = empyrionPorts.g; f.telnetPort.value = empyrionPorts.t; f.maxPlayers.value = 8; }
+  });
   f.addEventListener("submit", async (e) => {
     if (e.submitter?.value === "cancel") { dlg.close(); return; }
     e.preventDefault();
@@ -208,7 +227,8 @@ async function createDialog() {
       const s = await api.post("/api/servers", {
         name: f.name.value, gamePort: +f.gamePort.value, telnetPort: +f.telnetPort.value, maxPlayers: +f.maxPlayers.value,
         password: f.password.value, description: f.description.value, branch: f.branch.value,
-        public: f.public.checked, autoStart: f.autoStart.checked, autoRestart: f.autoRestart.checked,
+        public: f.public.checked, autoStart: f.autoStart.checked, autoRestart: f.autoRestart.checked, game: f.game.value,
+        ...(f.game.value === "vsl" ? { dbHost: f.dbHost.value, dbPort: +f.dbPort.value, dbName: f.dbName.value, dbUser: f.dbUser.value, dbPassword: f.dbPassword.value } : {}),
       });
       dlg.close();
       location.hash = `#/server/${s.id}`;
@@ -254,7 +274,8 @@ export async function renderServerDetail(page, id, setTitle) {
       return;
     }
     mount(page, html`<div id="srv-notice"></div>
-      <nav class="tabs">${["overview", "chat", ...toolTabs(store.me.role), ...featureTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])].map((k) =>
+      <nav class="tabs">${(s.game === "vsl" ? ["overview", ...(admin ? ["console", "settings", "logs"] : [])]
+        : ["overview", "chat", ...toolTabs(store.me.role), ...featureTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])]).map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
     head(s);
@@ -301,13 +322,16 @@ export async function renderServerDetail(page, id, setTitle) {
     if (tab === "overview") {
       mount(el, html`<div id="live"></div><div class="card"><dl class="kv">
         <dt>${t("folder")}</dt><dd>${s.rootDir}</dd>
+        ${s.game === "vsl" ? html`<dt>${t("srv_game")}</dt><dd>Vita Somnium Life</dd>
+        <dt>${t("ports")}</dt><dd>${s.gamePort} (UDP) · query ${s.telnetPort} (UDP)</dd>` : html`
         <dt>${t("ports")}</dt><dd>${s.gamePort}-${s.gamePort + 3} (UDP/TCP) · telnet ${s.telnetPort} · mod EAM ${s.modPort}</dd>
-        <dt>${t("branch")}</dt><dd>${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}</dd>
+        <dt>${t("branch")}</dt><dd>${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}</dd>`}
         <dt>${t("build")}</dt><dd>${s.buildId || "—"}${s.gameUpdateAvailable ? html` <span class="badge warn" title="${t("gu_hint")}">${t("gu_available", s.latestBuild)}</span>` : ""}</dd>
         <dt>${t("srv_max_players")}</dt><dd>${s.maxPlayers ?? "—"}</dd>
         ${s.startedUtc ? html`<dt>${t("since")}</dt><dd>${new Date(s.startedUtc).toLocaleString()}</dd>` : ""}
       </dl></div>`);
-      renderLive($("#live", el), s);
+      if (s.game === "vsl") mount($("#live", el), html`<div class="card"><div class="hint">${t("vsl_update_auto")}</div></div>`);
+      else renderLive($("#live", el), s);
       if (atLeast(store.me.role, "moderator")) drawWarnings(el, s);
     } else if (tab === "chat") {
       if (el.dataset.tab === "chat") return;
@@ -324,7 +348,7 @@ export async function renderServerDetail(page, id, setTitle) {
       return;
     } else if (tab === "console") {
       if (el.dataset.tab === "console") return; // keep the console content between live updates
-      mount(el, html`<div class="card"><div class="hint">${t("console_hint")}</div>
+      mount(el, html`<div class="card"><div class="hint">${t(s.game === "vsl" ? "vsl_console_hint" : "console_hint")}</div>
         <pre class="console" id="out"></pre>
         <form class="console-form" id="cform"><input name="cmd" type="text" autocomplete="off" maxlength="500"><button class="btn primary">${t("send")}</button></form></div>`);
       $("#cform", el).addEventListener("submit", async (e) => {
@@ -342,18 +366,18 @@ export async function renderServerDetail(page, id, setTitle) {
       if (el.dataset.tab === "settings") return;
       mount(el, html`<form class="card" id="sf">
         <div class="form-row">
-          <div><label>${t("srv_game_port")}</label><input name="gamePort" type="number" value="${s.gamePort}"></div>
-          <div><label>${t("srv_telnet_port")}</label><input name="telnetPort" type="number" value="${s.telnetPort}"></div>
+          <div><label>${t(s.game === "vsl" ? "srv_game_port_single" : "srv_game_port")}</label><input name="gamePort" type="number" value="${s.gamePort}"></div>
+          <div><label>${t(s.game === "vsl" ? "srv_query_port" : "srv_telnet_port")}</label><input name="telnetPort" type="number" value="${s.telnetPort}"></div>
         </div>
         <div class="form-row">
-          <div><label>${t("srv_max_players")}</label><input name="maxPlayers" type="number" min="1" max="200" value="${s.maxPlayers ?? 8}"></div>
-          <div><label>${t("srv_branch")}</label><select name="branch">
+          <div><label>${t("srv_max_players")}</label><input name="maxPlayers" type="number" min="1" max="1000" value="${s.maxPlayers ?? 8}"></div>
+          <div ${raw(s.game === "vsl" ? "hidden" : "")}><label>${t("srv_branch")}</label><select name="branch">
             <option value="public" ${raw(s.branch === "public" ? "selected" : "")}>${t("branch_public")}</option>
             <option value="experimental" ${raw(s.branch === "experimental" ? "selected" : "")}>${t("branch_experimental")}</option></select></div>
         </div>
         <label>${t("srv_password")}</label><input name="password" type="text" maxlength="64" placeholder="${s.hasPassword ? "••••••" : ""}">
-        <label>${t("srv_description")}</label><input name="description" type="text" maxlength="500" value="${s.description ?? ""}">
-        <label class="check"><input name="public" type="checkbox" ${raw(s.isPublic ? "checked" : "")}> ${t("srv_public")}</label>
+        <div ${raw(s.game === "vsl" ? "hidden" : "")}><label>${t("srv_description")}</label><input name="description" type="text" maxlength="500" value="${s.description ?? ""}">
+        <label class="check"><input name="public" type="checkbox" ${raw(s.isPublic ? "checked" : "")}> ${t("srv_public")}</label></div>
         <label class="check"><input name="autoStart" type="checkbox" ${raw(s.autoStart ? "checked" : "")}> ${t("srv_autostart")}</label>
         <label class="check"><input name="autoRestart" type="checkbox" ${raw(s.autoRestart ? "checked" : "")}> ${t("srv_autorestart")}</label>
         <button class="btn primary block">${t("save")}</button></form>`);

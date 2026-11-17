@@ -4,6 +4,10 @@ namespace Eam.Core.Servers;
 public sealed record ServerDefinition
 {
     public long Id { get; init; }
+    /// <summary>Which game this server runs (<see cref="GameKinds"/>).</summary>
+    public string Game { get; init; } = GameKinds.Empyrion;
+    public bool IsEmpyrion => Game == GameKinds.Empyrion;
+    public bool IsVsl => Game == GameKinds.Vsl;
     /// <summary>Folder-safe name, derived from <see cref="Name"/>.</summary>
     public required string Slug { get; init; }
     /// <summary>Free name chosen by the admin, also shown in the game's server list.</summary>
@@ -48,7 +52,14 @@ public sealed record ServerDefinition
     /// <summary>Per-server database (chat, players seen...). Never shared between servers.</summary>
     public string DatabaseFile => Path.Combine(EamDir, "server.db");
     public string ModDir => Path.Combine(GameDir, "Content", "Mods", "EAM");
+    /// <summary>Vita Somnium Life: its configuration files (managed keys are written by EAM).</summary>
+    public string VslConfigFile => Path.Combine(GameDir, "server_config.json");
+    public string VslDatabaseFile => Path.Combine(GameDir, "databaseinfo.json");
+    /// <summary>Vita Somnium Life: the game's output (Unity -logFile).</summary>
+    public string VslLogFile => Path.Combine(LogsDir, "game.log");
 
     /// <summary>Every port this server uses (game block + telnet + EAM mod).</summary>
-    public IEnumerable<int> AllPorts => Enumerable.Range(GamePort, PortAllocator.GamePortCount).Append(TelnetPort).Append(ModPort);
+    public IEnumerable<int> AllPorts => IsVsl
+        ? [GamePort, TelnetPort] // game port + Steam query port
+        : Enumerable.Range(GamePort, PortAllocator.GamePortCount).Append(TelnetPort).Append(ModPort);
 }

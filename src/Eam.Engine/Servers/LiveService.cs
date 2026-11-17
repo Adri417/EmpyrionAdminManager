@@ -406,7 +406,7 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
         SampleProcesses(def, l);
         _dirty[def.Id] = true;
 
-        if (!_linkTasks.ContainsKey(def.Id) && rt.State == ServerState.Running && def.ModKey.Length > 0)
+        if (!_linkTasks.ContainsKey(def.Id) && rt.State == ServerState.Running && def.ModKey.Length > 0 && def.IsEmpyrion)
             _linkTasks[def.Id] = Task.Run(() => LinkLoopAsync(def));
 
         if (_links.TryGetValue(def.Id, out var link))

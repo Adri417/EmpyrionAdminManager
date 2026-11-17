@@ -30,15 +30,21 @@ public sealed class GameUpdateWatcher(ServerManager manager, LiveService live, B
         if (servers.Count == 0) return;
         // SteamCMD may be missing (server copied from EAH, data moved): without it Steam cannot be asked.
         if (!manager.Steam.IsInstalled) await manager.Steam.EnsureInstalledAsync(null, stop);
-        var builds = await manager.Steam.CheckLatestBuildsAsync(stop);
-        log.LogInformation("Latest dedicated server builds on Steam: {Builds}", string.Join(", ", builds.Select(b => $"{b.Key} {b.Value}")));
-        if (builds.Count == 0) return;
+        var byApp = new Dictionary<string, IReadOnlyDictionary<string, string>>();
+        foreach (var app in servers.Select(d => GameKinds.AppId(d.Game)).Distinct())
+        {
+            byApp[app] = await manager.Steam.CheckLatestBuildsAsync(stop, app);
+            log.LogInformation("Latest builds of Steam app {App}: {Builds}", app, string.Join(", ", byApp[app].Select(b => $"{b.Key} {b.Value}")));
+        }
         foreach (var def in servers)
         {
+            var builds = byApp[GameKinds.AppId(def.Game)];
             if (!builds.TryGetValue(def.Branch, out var latest) || manager.InstalledBuild(def) is not { Length: > 0 } installed || installed == latest) continue;
             if (_handled.TryGetValue(def.Id, out var done) && done == latest) continue;
             _handled[def.Id] = latest;
             var mode = FeatureStore.Load<GameplaySettings>(live.Data(def), "gameplay");
+            // Vita Somnium Life has no gameplay page yet: always updated automatically (Adrien's choice).
+            if (def.IsVsl) { mode.GameUpdateMode = "auto"; mode.GameUpdateBackupFirst = false; }
             if (mode.GameUpdateMode == "off") continue;
             ServerManager.ServerLog(def, $"Game update available on Steam: build {installed} -> {latest} ({def.Branch})");
             if (mode.GameUpdateMode != "auto") continue;
@@ -55,7 +61,7 @@ public sealed class GameUpdateWatcher(ServerManager manager, LiveService live, B
                 {
                     await manager.RestartWithAsync(def.Id, running ? 5 : 0, "Mise a jour du jeu / Game update", "EAM (auto update)", "update", async (d, r) =>
                     {
-                        if (mode.GameUpdateBackupFirst) await backups.CreateAsync(d.Id, "before-update", "EAM (auto update)");
+                        if (mode.GameUpdateBackupFirst && d.IsEmpyrion) await backups.CreateAsync(d.Id, "before-update", "EAM (auto update)");
                         await manager.UpdateFilesAsync(d, r, "EAM (auto update)");
                     });
                 }

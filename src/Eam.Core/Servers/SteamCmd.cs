@@ -43,14 +43,14 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
 
     /// <summary>Installs or updates the game into <paramref name="installDir"/>. Returns the Steam build id.</summary>
     public async Task<string?> InstallOrUpdateAsync(string installDir, string branch, bool validate,
-        IProgress<SteamProgress>? progress, Action<string>? log, CancellationToken ct)
+        IProgress<SteamProgress>? progress, Action<string>? log, CancellationToken ct, string appId = EmpyrionDedicatedAppId)
     {
         await Gate.WaitAsync(ct);
         try
         {
             await EnsureInstalledAsync(progress, ct);
             Directory.CreateDirectory(installDir);
-            var args = new List<string> { "+force_install_dir", installDir, "+login", "anonymous", "+app_update", EmpyrionDedicatedAppId };
+            var args = new List<string> { "+force_install_dir", installDir, "+login", "anonymous", "+app_update", appId };
             if (!string.IsNullOrWhiteSpace(branch) && branch != "public") { args.Add("-beta"); args.Add(branch); }
             if (validate) args.Add("validate");
             args.Add("+quit");
@@ -59,7 +59,7 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
             for (var attempt = 1; ; attempt++)
             {
                 var (code, success, lastError) = await RunAsync(args, progress, log, ct);
-                if (success) return ReadBuildId(installDir);
+                if (success) return ReadBuildId(installDir, appId);
                 if (attempt >= 3)
                     throw new InvalidOperationException(lastError ?? $"steamcmd_exit_{code}");
                 log?.Invoke($"SteamCMD exited with code {code}, retrying ({attempt}/3)");
@@ -73,23 +73,27 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
         finally { Gate.Release(); }
     }
 
-    /// <summary>Latest build of the dedicated server on Steam, per branch ("public", "experimental"), from the last check.</summary>
-    public IReadOnlyDictionary<string, string> LatestBuilds { get; private set; } = new Dictionary<string, string>();
+    /// <summary>Latest build of the Empyrion dedicated server on Steam, per branch ("public", "experimental"), from the last check.</summary>
+    public IReadOnlyDictionary<string, string> LatestBuilds => LatestBuildsOf(EmpyrionDedicatedAppId);
     public DateTime? LatestCheckedUtc { get; private set; }
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> _latest = new();
 
-    /// <summary>Asks Steam which build of the dedicated server is the newest (does not download anything).</summary>
-    public async Task<IReadOnlyDictionary<string, string>> CheckLatestBuildsAsync(CancellationToken ct)
+    public IReadOnlyDictionary<string, string> LatestBuildsOf(string appId) =>
+        _latest.TryGetValue(appId, out var b) ? b : new Dictionary<string, string>();
+
+    /// <summary>Asks Steam which build of a dedicated server is the newest (does not download anything).</summary>
+    public async Task<IReadOnlyDictionary<string, string>> CheckLatestBuildsAsync(CancellationToken ct, string appId = EmpyrionDedicatedAppId)
     {
-        if (!IsInstalled) return LatestBuilds;
+        if (!IsInstalled) return LatestBuildsOf(appId);
         await Gate.WaitAsync(ct);
         try
         {
             var sb = new System.Text.StringBuilder();
-            var args = new List<string> { "+login", "anonymous", "+app_info_update", "1", "+app_info_print", EmpyrionDedicatedAppId, "+quit" };
+            var args = new List<string> { "+login", "anonymous", "+app_info_update", "1", "+app_info_print", appId, "+quit" };
             await RunAsync(args, null, line => sb.AppendLine(line), ct);
             var found = ParseBranchBuilds(sb.ToString());
-            if (found.Count > 0) { LatestBuilds = found; LatestCheckedUtc = DateTime.UtcNow; }
-            return LatestBuilds;
+            if (found.Count > 0) { _latest[appId] = found; LatestCheckedUtc = DateTime.UtcNow; }
+            return LatestBuildsOf(appId);
         }
         finally { Gate.Release(); }
     }
@@ -150,9 +154,9 @@ public sealed partial class SteamCmd(string steamCmdDir, HttpClient http)
     public static string WorkshopItemDir(string root, string itemId) =>
         Path.Combine(root, "steamapps", "workshop", "content", EmpyrionGameAppId, itemId);
 
-    public static string? ReadBuildId(string installDir)
+    public static string? ReadBuildId(string installDir, string appId = EmpyrionDedicatedAppId)
     {
-        var manifest = Path.Combine(installDir, "steamapps", $"appmanifest_{EmpyrionDedicatedAppId}.acf");
+        var manifest = Path.Combine(installDir, "steamapps", $"appmanifest_{appId}.acf");
         if (!File.Exists(manifest)) return null;
         var m = BuildIdRegex().Match(File.ReadAllText(manifest));
         return m.Success ? m.Groups[1].Value : null;

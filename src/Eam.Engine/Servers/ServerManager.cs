@@ -15,7 +15,8 @@ public sealed class ServerException(string code, string? detail = null) : Except
 
 public sealed record CreateServerRequest(
     string Name, int? GamePort, int? TelnetPort, int MaxPlayers, string? Password, string? Description,
-    string Branch, bool Public, bool AutoStart, bool AutoRestart);
+    string Branch, bool Public, bool AutoStart, bool AutoRestart, string? Game = null,
+    string? DbHost = null, int? DbPort = null, string? DbName = null, string? DbUser = null, string? DbPassword = null);
 
 public sealed record ServerSettingsRequest(
     int GamePort, int TelnetPort, int MaxPlayers, string? Password, string? Description,
@@ -59,14 +60,24 @@ public sealed class ServerManager : BackgroundService
     {
         var rt = Runtime(s.Id);
         DedicatedYaml? yaml = null;
-        try { yaml = File.Exists(s.YamlFile) ? DedicatedYaml.Load(s.YamlFile) : ReadPending(s)?.ToYaml(); } catch { }
+        if (s.IsEmpyrion)
+            try { yaml = File.Exists(s.YamlFile) ? DedicatedYaml.Load(s.YamlFile) : ReadPending(s)?.ToYaml(); } catch { }
+        else if (s.IsVsl)
+        {
+            var j = VslConfig.Load(s.VslConfigFile);
+            var pend = ReadPending(s);
+            yaml = DedicatedYaml.Parse("ServerConfig:\n");
+            yaml.Set("ServerConfig", "Srv_MaxPlayers", (j["maxPlayers"]?.ToString() ?? pend?.MaxPlayers.ToString()));
+            yaml.Set("ServerConfig", "Srv_Password", j["password"]?.ToString() ?? pend?.Password);
+        }
+        var latestBuilds = _steam.LatestBuildsOf(GameKinds.AppId(s.Game));
         string? yamlValue(string key) => yaml?.Get("ServerConfig", key);
         return new
         {
-            id = s.Id, slug = s.Slug, name = s.Name, displayName = s.DisplayName, listName = s.ListName, rootDir = s.RootDir, gamePort = s.GamePort, telnetPort = s.TelnetPort, modPort = s.ModPort,
+            id = s.Id, game = s.Game, slug = s.Slug, name = s.Name, displayName = s.DisplayName, listName = s.ListName, rootDir = s.RootDir, gamePort = s.GamePort, telnetPort = s.TelnetPort, modPort = s.ModPort,
             branch = s.Branch, autoStart = s.AutoStart, autoRestart = s.AutoRestart, installed = s.Installed, buildId = s.BuildId,
-            latestBuild = _steam.LatestBuilds.GetValueOrDefault(s.Branch),
-            gameUpdateAvailable = s.Installed && s.BuildId is { Length: > 0 } b0 && _steam.LatestBuilds.TryGetValue(s.Branch, out var lb) && lb != b0
+            latestBuild = latestBuilds.GetValueOrDefault(s.Branch),
+            gameUpdateAvailable = s.Installed && s.BuildId is { Length: > 0 } b0 && latestBuilds.TryGetValue(s.Branch, out var lb) && lb != b0
                 && long.TryParse(lb, out var lbn) && long.TryParse(b0, out var b0n) && lbn > b0n,
             createdUtc = s.CreatedUtc,
             maxPlayers = int.TryParse(yamlValue("Srv_MaxPlayers"), out var mp) ? mp : (int?)null,
@@ -137,8 +148,9 @@ public sealed class ServerManager : BackgroundService
         await Push(def.Id);
         try
         {
-            var build = await _steam.InstallOrUpdateAsync(def.GameDir, def.Branch, false, null, line => ServerLog(def, "[steamcmd] " + line), CancellationToken.None);
+            var build = await _steam.InstallOrUpdateAsync(def.GameDir, def.Branch, false, null, line => ServerLog(def, "[steamcmd] " + line), CancellationToken.None, GameKinds.AppId(def.Game));
             _store.Update(def with { BuildId = build ?? def.BuildId });
+            if (def.IsVsl) VslConfig.ApplyManaged(def); // an update could bring back the shipped file
             ServerLog(def, $"Game files updated by {by} (build {build ?? "?"})");
         }
         finally { rt.State = ServerState.Stopped; }
@@ -152,7 +164,7 @@ public sealed class ServerManager : BackgroundService
     /// </summary>
     public string? InstalledBuild(ServerDefinition def)
     {
-        var real = SteamCmd.ReadBuildId(def.GameDir);
+        var real = SteamCmd.ReadBuildId(def.GameDir, GameKinds.AppId(def.Game));
         if (real is { Length: > 0 } && real != def.BuildId)
         {
             _store.Update(def with { BuildId = real });
@@ -166,7 +178,9 @@ public sealed class ServerManager : BackgroundService
     public async Task<ServerDefinition> CreateAsync(CreateServerRequest req, string by)
     {
         var name = CleanName(req.Name);
+        var game = GameKinds.Normalize(req.Game);
         ValidateCommon(req.MaxPlayers, req.Branch, req.Description, req.Password);
+        if (game == GameKinds.Vsl && string.IsNullOrWhiteSpace(req.DbName)) throw new ServerException("vsl_database_required");
         await CreateGate.WaitAsync();
         try
         {
@@ -184,15 +198,22 @@ public sealed class ServerManager : BackgroundService
             Directory.CreateDirectory(root);
             var def = _store.Add(new ServerDefinition
             {
-                Slug = slug, Name = name, RootDir = root, GamePort = gamePort, TelnetPort = telnetPort,
-                TelnetPassword = NewSecret(), Branch = NormalizeBranch(req.Branch),
+                Slug = slug, Name = name, RootDir = root, GamePort = gamePort, TelnetPort = telnetPort, Game = game,
+                TelnetPassword = NewSecret(), Branch = game == GameKinds.Vsl ? "public" : NormalizeBranch(req.Branch),
                 AutoStart = req.AutoStart, AutoRestart = req.AutoRestart, ModKey = NewModKey(),
             });
             Directory.CreateDirectory(def.GameDir);
             Directory.CreateDirectory(def.LogsDir);
             // Settings that need the game files are written after the installation.
             WritePending(def, new PendingSettings(req.MaxPlayers, req.Password, req.Description, req.Public));
-            ServerLog(def, $"Server created by {by}: '{name}', ports {gamePort}-{gamePort + 3}, telnet {telnetPort}");
+            if (def.IsVsl)
+            {
+                // The database connection is kept until the game files exist (databaseinfo.json is written then).
+                File.WriteAllText(Path.Combine(def.EamDir, "pending-database.json"), System.Text.Json.JsonSerializer.Serialize(
+                    new VslConfig.Database(req.DbHost ?? "127.0.0.1", req.DbPort ?? 3306, req.DbName!.Trim(), (req.DbUser ?? "root").Trim(), req.DbPassword)));
+                ServerLog(def, $"Server created by {by}: Vita Somnium Life '{name}', game port {gamePort}, query port {telnetPort}");
+            }
+            else ServerLog(def, $"Server created by {by}: '{name}', ports {gamePort}-{gamePort + 3}, telnet {telnetPort}");
             _log.LogInformation("{By} created server '{Name}' in {Root}", by, name, root);
             var rt = Runtime(def.Id);
             rt.State = ServerState.NotInstalled;
@@ -378,7 +399,8 @@ public sealed class ServerManager : BackgroundService
                     updated = updated with { Slug = slug, RootDir = newRoot };
                 }
             }
-            if (File.Exists(updated.YamlFile)) DedicatedYaml.Load(updated.YamlFile).Set("ServerConfig", "Srv_Name", updated.ListName).Save(updated.YamlFile);
+            if (updated.IsVsl) { if (File.Exists(updated.VslConfigFile)) VslConfig.ApplyManaged(updated); }
+            else if (File.Exists(updated.YamlFile)) DedicatedYaml.Load(updated.YamlFile).Set("ServerConfig", "Srv_Name", updated.ListName).Save(updated.YamlFile);
             _store.Update(updated);
             ServerLog(updated, $"Renamed by {by}: '{def.Name}' -> '{name}' (folder {updated.RootDir}, name in the game list '{updated.ListName}')");
             await Task.CompletedTask;
@@ -404,7 +426,12 @@ public sealed class ServerManager : BackgroundService
                 AutoStart = req.AutoStart, AutoRestart = req.AutoRestart,
             };
             _store.Update(updated);
-            if (File.Exists(updated.YamlFile))
+            if (updated.IsVsl)
+            {
+                if (File.Exists(updated.VslConfigFile)) { VslConfig.ApplyManaged(updated); VslConfig.ApplySettings(updated, req.MaxPlayers, req.Password); }
+                else WritePending(updated, new PendingSettings(req.MaxPlayers, req.Password, req.Description, req.Public));
+            }
+            else if (File.Exists(updated.YamlFile))
             {
                 var y = DedicatedYaml.Load(updated.YamlFile);
                 ApplyManagedKeys(y, updated);
@@ -460,7 +487,7 @@ public sealed class ServerManager : BackgroundService
         if (Runtime(id).State is not (ServerState.Running or ServerState.Starting)) return null;
         var def = Get(id);
         Dictionary<string, string> latest;
-        try { latest = new(await _steam.CheckLatestBuildsAsync(CancellationToken.None)); }
+        try { latest = new(await _steam.CheckLatestBuildsAsync(CancellationToken.None, GameKinds.AppId(def.Game))); }
         catch { return null; } // Steam not reachable: the update itself will tell
         return latest.TryGetValue(def.Branch, out var newest) && InstalledBuild(def) == newest ? newest : null;
     }
@@ -471,7 +498,7 @@ public sealed class ServerManager : BackgroundService
         if (rt.State is not (ServerState.Running or ServerState.Starting)) { await InstallAsync(id, false, by); return; }
         await RestartWithAsync(id, 5, "Mise a jour du jeu / Game update", by, "update", async (d, r) =>
         {
-            await backups.CreateAsync(d.Id, "before-update", by);
+            if (d.IsEmpyrion) await backups.CreateAsync(d.Id, "before-update", by);
             await UpdateFilesAsync(d, r, by);
         });
     }
@@ -495,9 +522,10 @@ public sealed class ServerManager : BackgroundService
         });
         try
         {
-            var build = await _steam.InstallOrUpdateAsync(def.GameDir, def.Branch, validate || firstInstall, progress, line => ServerLog(def, "[steamcmd] " + line), CancellationToken.None);
+            var build = await _steam.InstallOrUpdateAsync(def.GameDir, def.Branch, validate || firstInstall, progress, line => ServerLog(def, "[steamcmd] " + line), CancellationToken.None, GameKinds.AppId(def.Game));
             var updated = def with { Installed = true, BuildId = build ?? def.BuildId };
-            PrepareYaml(updated);
+            if (updated.IsVsl) PrepareVsl(updated);
+            else PrepareYaml(updated);
             _store.Update(updated);
             rt.State = ServerState.Stopped;
             ServerLog(updated, $"Game files ready (build {updated.BuildId ?? "?"})");
@@ -515,6 +543,24 @@ public sealed class ServerManager : BackgroundService
             rt.ProgressText = null;
         }
     });
+
+    /// <summary>Vita Somnium Life: writes EAM's values into server_config.json and, the first time, databaseinfo.json.</summary>
+    private static void PrepareVsl(ServerDefinition def)
+    {
+        VslConfig.ApplyManaged(def);
+        if (ReadPending(def) is { } p)
+        {
+            VslConfig.ApplySettings(def, p.MaxPlayers, p.Password);
+            File.Delete(PendingFile(def));
+        }
+        var pendingDb = Path.Combine(def.EamDir, "pending-database.json");
+        if (File.Exists(pendingDb))
+        {
+            var db = System.Text.Json.JsonSerializer.Deserialize<VslConfig.Database>(File.ReadAllText(pendingDb));
+            if (db is not null) VslConfig.WriteDatabase(def, db);
+            File.Delete(pendingDb);
+        }
+    }
 
     /// <summary>Creates EAM's own dedicated-eam.yaml from the game's template and applies EAM-managed keys.</summary>
     private void PrepareYaml(ServerDefinition def)
@@ -590,6 +636,7 @@ public sealed class ServerManager : BackgroundService
         if (!def.Installed) throw new ServerException("not_installed");
         if (rt.State is ServerState.Running or ServerState.Starting) throw new ServerException("already_running");
         if (FindGameProcesses(def).Count > 0) throw new ServerException("already_running");
+        if (def.IsVsl) { await StartVslAsync(def, rt, by); return; }
         if (!File.Exists(def.YamlFile)) PrepareYaml(def);
         def = InstallMod(def);
         var busy = def.AllPorts.Where(PortAllocator.IsPortInUse).ToList();
@@ -616,6 +663,54 @@ public sealed class ServerManager : BackgroundService
         ServerLog(def, $"Start requested by {by}");
         _log.LogInformation("{By} started server '{Name}'", by, def.Name);
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Vita Somnium Life: the server exe is started by EAM itself, its console input kept to type "stop" later,
+    /// its output written to eam\logs\game.log.
+    /// </summary>
+    private async Task StartVslAsync(ServerDefinition def, ServerRuntime rt, string by)
+    {
+        PrepareVsl(def);
+        var busy = def.AllPorts.Where(PortAllocator.IsPortInUse).ToList();
+        if (busy.Count > 0) throw new ServerException("port_used_by_program", string.Join(", ", busy));
+        var exe = Path.Combine(def.GameDir, GameKinds.VslExe);
+        if (!File.Exists(exe)) throw new ServerException("game_files_missing", exe);
+        Directory.CreateDirectory(def.LogsDir);
+        var psi = new ProcessStartInfo(exe)
+        {
+            WorkingDirectory = def.GameDir,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            // Only the console input is kept (to type "stop"). The output goes to Unity's own log file, never
+            // through EAM: if EAM restarts (update), the game never writes into a closed pipe.
+            RedirectStandardInput = true,
+        };
+        psi.ArgumentList.Add("-batchmode");
+        psi.ArgumentList.Add("-nographics");
+        psi.ArgumentList.Add("-logFile");
+        psi.ArgumentList.Add(def.VslLogFile);
+        // Unity rewrites its log file at each start: the previous one is kept beside it.
+        try { if (File.Exists(def.VslLogFile)) File.Move(def.VslLogFile, Path.Combine(def.LogsDir, "game-previous.log"), true); } catch { }
+        var proc = Process.Start(psi) ?? throw new ServerException("start_failed");
+        rt.Owned?.Dispose();
+        rt.Owned = proc;
+        rt.ProcessId = proc.Id;
+        rt.WantRunning = true;
+        rt.State = ServerState.Starting;
+        rt.StartRequestedUtc = DateTime.UtcNow;
+        rt.LastError = null;
+        ServerLog(def, $"Start requested by {by} (Vita Somnium Life, PID {proc.Id})");
+        _log.LogInformation("{By} started server '{Name}'", by, def.Name);
+        await Task.CompletedTask;
+    }
+
+    /// <summary>Vita Somnium Life: a line typed in the server's own console (only for a server EAM started).</summary>
+    private static bool VslType(ServerRuntime rt, string line)
+    {
+        if (rt.Owned is not { HasExited: false } p) return false;
+        try { p.StandardInput.WriteLine(line); p.StandardInput.Flush(); return true; }
+        catch { return false; }
     }
 
     /// <summary>Clean stop: warns players, then saveandexit, waits, and only kills as a last resort.</summary>
@@ -646,6 +741,14 @@ public sealed class ServerManager : BackgroundService
             var text = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
             for (var left = delayMinutes; left > 0; left--)
             {
+                if (!def.IsEmpyrion)
+                {
+                    // No in-game messages for this game yet: only the countdown.
+                    rt.ProgressText = $"{left} min";
+                    await Push(def.Id);
+                    await Task.Delay(TimeSpan.FromMinutes(1), cts.Token);
+                    continue;
+                }
                 // Like EAH: red alerts (alarm sound) at 5, 3, 2 and 1 minute, also written in the chat;
                 // at 1 minute every player is kicked so the save happens with nobody in game.
                 if (left == 1)
@@ -677,16 +780,26 @@ public sealed class ServerManager : BackgroundService
         }
         finally { rt.StopCountdown = null; }
 
-        // Anyone who came back during the last minute.
-        if (delayMinutes > 0) await KickEveryone(def);
-        rt.ProgressText = "saveandexit";
-        await Push(def.Id);
-        try
+        if (def.IsVsl)
         {
-            await TelnetClient.SendAsync(def.TelnetPort, def.TelnetPassword, "saveandexit 0");
-            ServerLog(def, "saveandexit sent");
+            rt.ProgressText = "stop";
+            await Push(def.Id);
+            if (VslType(rt, "stop")) ServerLog(def, "\"stop\" typed in the server console");
+            else ServerLog(def, "Console of the server not available (started before EAM's restart): it will be stopped by force");
         }
-        catch (Exception e) { ServerLog(def, "saveandexit could not be sent: " + e.Message); }
+        else
+        {
+            // Anyone who came back during the last minute.
+            if (delayMinutes > 0) await KickEveryone(def);
+            rt.ProgressText = "saveandexit";
+            await Push(def.Id);
+            try
+            {
+                await TelnetClient.SendAsync(def.TelnetPort, def.TelnetPassword, "saveandexit 0");
+                ServerLog(def, "saveandexit sent");
+            }
+            catch (Exception e) { ServerLog(def, "saveandexit could not be sent: " + e.Message); }
+        }
 
         var deadline = DateTime.UtcNow + StopTimeout;
         while (DateTime.UtcNow < deadline && FindGameProcesses(def).Count > 0)
@@ -703,6 +816,8 @@ public sealed class ServerManager : BackgroundService
         rt.ProcessId = null;
         rt.StartedUtc = null;
         rt.ProgressText = null;
+        rt.Owned?.Dispose();
+        rt.Owned = null;
         ServerLog(def, "Server stopped");
     }
 
@@ -746,6 +861,12 @@ public sealed class ServerManager : BackgroundService
         command = (command ?? "").Trim();
         if (command.Length is 0 or > 500 || command.Contains('\n') || command.Contains('\r')) throw new ServerException("invalid_command");
         ServerLog(def, $"Console ({by}): {command}");
+        if (def.IsVsl)
+        {
+            if (!VslType(rt, command)) throw new ServerException("console_unavailable");
+            await Task.Delay(1500); // its answer goes to the game log
+            return string.Join("\n", GameLogTail(id, 15));
+        }
         try { return await TelnetClient.SendAsync(def.TelnetPort, def.TelnetPassword, command); }
         catch (Exception e) { throw new ServerException("telnet_failed", e.Message); }
     }
@@ -753,6 +874,7 @@ public sealed class ServerManager : BackgroundService
     public IReadOnlyList<string> GameLogTail(long id, int lines)
     {
         var def = Get(id);
+        if (def.IsVsl) return File.Exists(def.VslLogFile) ? Tail(def.VslLogFile, lines) : [];
         var logs = Path.Combine(def.GameDir, "Logs");
         if (!Directory.Exists(logs)) return [];
         var newest = Directory.EnumerateFiles(logs, "Dedicated_*.log", SearchOption.AllDirectories)
@@ -814,7 +936,7 @@ public sealed class ServerManager : BackgroundService
         if (rt.Lock.CurrentCount == 0) return; // an operation is running: it owns the state
         var before = (rt.State, rt.ProcessId);
         var procs = FindGameProcesses(def);
-        var main = procs.FirstOrDefault(p => SafeName(p) == "EmpyrionDedicated");
+        var main = procs.FirstOrDefault(p => SafeName(p) == GameKinds.MainProcess(def.Game));
 
         if (procs.Count > 0)
         {
@@ -829,7 +951,13 @@ public sealed class ServerManager : BackgroundService
                 }
                 rt.State = ServerState.Starting; rt.WantRunning = true; rt.StartRequestedUtc ??= DateTime.UtcNow;
             }
-            if (rt.State == ServerState.Starting && await TelnetClient.IsReachableAsync(def.TelnetPort, ct))
+            if (rt.State == ServerState.Starting && def.IsVsl && PortAllocator.IsPortInUse(def.GamePort))
+            {
+                rt.State = ServerState.Running;
+                rt.StartedUtc = DateTime.UtcNow;
+                ServerLog(def, "Server is running (game port open)");
+            }
+            else if (rt.State == ServerState.Starting && def.IsEmpyrion && await TelnetClient.IsReachableAsync(def.TelnetPort, ct))
             {
                 rt.State = ServerState.Running;
                 rt.StartedUtc = DateTime.UtcNow;
@@ -1010,7 +1138,7 @@ public sealed class ServerManager : BackgroundService
 
     private static void ValidateCommon(int maxPlayers, string branch, string? description, string? password)
     {
-        if (maxPlayers is < 1 or > 200) throw new ServerException("invalid_max_players");
+        if (maxPlayers is < 1 or > 1000) throw new ServerException("invalid_max_players");
         if (branch is not ("public" or "experimental")) throw new ServerException("invalid_branch");
         if (description?.Length > 500) throw new ServerException("description_too_long");
         if (password?.Length > 64) throw new ServerException("password_too_long");
@@ -1068,13 +1196,13 @@ public sealed class ServerManager : BackgroundService
     private static string SafeName(Process p) { try { return p.ProcessName; } catch { return ""; } }
 
     /// <summary>Every Empyrion process (dedicated, launcher, playfields) running from THIS server's folder only.</summary>
-    public static List<Process> FindGameProcesses(ServerDefinition def) => FindGameProcesses(def.GameDir);
+    public static List<Process> FindGameProcesses(ServerDefinition def) => FindGameProcesses(def.GameDir, def.Game);
 
-    /// <summary>Every Empyrion process running from this game folder.</summary>
-    public static List<Process> FindGameProcesses(string gameDir)
+    /// <summary>Every process of the game running from this game folder.</summary>
+    public static List<Process> FindGameProcesses(string gameDir, string game = GameKinds.Empyrion)
     {
         var result = new List<Process>();
-        foreach (var name in new[] { "EmpyrionDedicated", "EmpyrionPlayfieldServer", "EmpyrionLauncher" })
+        foreach (var name in GameKinds.ProcessNames(game))
         {
             foreach (var p in Process.GetProcessesByName(name))
             {
@@ -1107,6 +1235,7 @@ public sealed class ServerManager : BackgroundService
 
     private async Task Announce(ServerDefinition def, string text, bool alert)
     {
+        if (!def.IsEmpyrion) return;
         if (alert && RedAlert is { } red && !await red(def.Id, text)) ServerLog(def, "Red alert not sent (EAM mod not connected): chat only");
         if (ServerChat is { } chat && await chat(def.Id, text)) return;
         await TrySay(def, text);
@@ -1114,6 +1243,7 @@ public sealed class ServerManager : BackgroundService
 
     private async Task KickEveryone(ServerDefinition def)
     {
+        if (!def.IsEmpyrion) return;
         if (KickAllPlayers is null) return;
         try { await KickAllPlayers(def.Id, "Redemarrage du serveur / Server restart"); }
         catch (Exception e) { ServerLog(def, "Kick before stop failed: " + e.Message); }

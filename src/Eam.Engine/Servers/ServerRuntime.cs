@@ -24,4 +24,9 @@ public sealed class ServerRuntime
     public CancellationTokenSource? StopCountdown { get; set; }
     /// <summary>Last stop or forced stop asked by an admin: processes still closing are not a restart nor a crash.</summary>
     public DateTime? ManualStopUtc { get; set; }
+    /// <summary>
+    /// Vita Somnium Life: the server process started by EAM, whose console input EAM keeps (to type "stop").
+    /// Null after an engine restart: the server is then stopped by force if needed.
+    /// </summary>
+    public System.Diagnostics.Process? Owned { get; set; }
 }

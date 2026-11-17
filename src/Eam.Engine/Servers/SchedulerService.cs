@@ -289,7 +289,7 @@ public sealed class SchedulerService(ServerManager manager, LiveService live, Ba
             case "update":
                 await manager.RestartWithAsync(def.Id, running ? p.WarnMinutes : 0, p.Message ?? "Server update", who, "update", async (d, r) =>
                 {
-                    if (p.BackupFirst) await backups.CreateAsync(d.Id, "before-update", who);
+                    if (p.BackupFirst && d.IsEmpyrion) await backups.CreateAsync(d.Id, "before-update", who);
                     await manager.UpdateFilesAsync(d, r, who);
                 });
                 return "ok";

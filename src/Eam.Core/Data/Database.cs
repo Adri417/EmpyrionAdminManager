@@ -128,6 +128,10 @@ public sealed class Database
         """
         ALTER TABLE servers ADD COLUMN display_name TEXT NULL;
         """,
+        // 6: several games (Empyrion, Vita Somnium Life)
+        """
+        ALTER TABLE servers ADD COLUMN game TEXT NOT NULL DEFAULT 'empyrion';
+        """,
     ];
 
     public void Migrate()
