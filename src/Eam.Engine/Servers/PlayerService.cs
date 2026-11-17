@@ -263,27 +263,21 @@ public sealed class PlayerService
             // ---- version 0.9.5
             case "god":
             {
+                // The game's real god mode: "gm" (a toggle) run in the player's own console through telnet.
                 Need("gamemaster");
+                if (online is null) throw new ServerException("player_offline");
                 var m = data.Meta(steamId);
                 var on = r.On ?? !m.God;
-                data.SaveMeta(m with { God = on });
-                detail = on ? "on" : "off";
-                if (online is not null)
+                if (on != m.God)
                 {
-                    // The game's own god mode ("gm", a toggle) run as if the player typed it in their console.
                     var full = await _live.RequestAsync(id, new() { ["op"] = "player", ["id"] = online.Id, ["full"] = true });
                     var client = LiveService.Int(full, "clientId");
-                    if (client > 0 && on != m.God)
-                    {
-                        var answer = await _manager.ConsoleAsync(id, $"remoteex cl={client} 'gm'", by);
-                        detail += $" (gm sent to client {client}: {answer.Trim()})";
-                    }
-                    if (on)
-                    {
-                        var max = Math.Max(1, (int)(online.HealthMax > 0 ? online.HealthMax : 500));
-                        await _live.RequestAsync(id, new() { ["op"] = "player_set", ["id"] = online.Id, ["health"] = max, ["food"] = 10000, ["oxygen"] = 10000, ["stamina"] = 10000, ["radiation"] = 0 });
-                    }
+                    if (client <= 0) throw new ServerException("player_offline");
+                    var answer = await _manager.ConsoleAsync(id, $"remoteex cl={client} 'gm'", by);
+                    detail = $"{(on ? "on" : "off")} (client {client}: {answer.Trim()})";
                 }
+                else detail = on ? "on" : "off";
+                data.SaveMeta(m with { God = on });
                 break;
             }
             case "meta":

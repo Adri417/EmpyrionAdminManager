@@ -28,7 +28,6 @@ public sealed class PlayerCareService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stop)
     {
-        _ = Task.Run(() => GodLoopAsync(stop), stop);
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
         while (await timer.WaitForNextTickAsync(stop))
         {
@@ -94,39 +93,6 @@ public sealed class PlayerCareService : BackgroundService
         var bag = info.TryGetProperty("bag", out var b) && b.ValueKind == JsonValueKind.Array ? b.GetRawText() : "[]";
         if (reason == "periodic" && toolbelt == "[]" && bag == "[]") return 0; // empty right after a death or a reset: keep the last full one
         return _live.Data(def).AddInventorySnapshot(steam, p.Name, reason, p.Playfield, toolbelt, bag, DateTime.UtcNow);
-    }
-
-    /// <summary>
-    /// God mode: every 2 seconds, only for the players who have it (usually one or two admins), their health is
-    /// read again and put back to the maximum (with food, oxygen, stamina; radiation to 0). The game has no
-    /// real invulnerability for another player: a single hit stronger than the whole health can still kill.
-    /// </summary>
-    private async Task GodLoopAsync(CancellationToken stop)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-        while (await timer.WaitForNextTickAsync(stop))
-            foreach (var def in _manager.Definitions())
-            {
-                if (_manager.Runtime(def.Id).State != ServerState.Running || !_live.IsLinked(def.Id)) continue;
-                try { await GodModeAsync(def, _live.Data(def)); }
-                catch (Exception e) when (e is not OperationCanceledException) { _log.LogDebug("God mode on '{Name}' failed: {Err}", def.Name, e.Message); }
-            }
-    }
-
-    private async Task GodModeAsync(ServerDefinition def, ServerData data)
-    {
-        var online = _live.OnlinePlayers(def.Id);
-        if (online.Count == 0) return;
-        var gods = data.Metas().Where(m => m.God).Select(m => m.SteamId).ToHashSet();
-        if (gods.Count == 0) return;
-        foreach (var old in online)
-        {
-            if (old.SteamId is null || !gods.Contains(old.SteamId)) continue;
-            var p = await _live.FreshAsync(def.Id, old);
-            var max = Math.Max(1, (int)(p.HealthMax > 0 ? p.HealthMax : 500));
-            if (p.Health >= max) continue;
-            await _live.RequestAsync(def.Id, new() { ["op"] = "player_set", ["id"] = p.Id, ["health"] = max, ["food"] = 10000, ["oxygen"] = 10000, ["stamina"] = 10000, ["radiation"] = 0 });
-        }
     }
 
     private Task OnModEventAsync(ServerDefinition def, string ev, JsonElement m)

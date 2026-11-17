@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.37 (2026-11-17) - Vrai god mode, ajout de serveur
+- God mode depuis EAM : c'est maintenant le vrai god mode du jeu (« gm »), lancé dans la console du joueur comme s'il l'avait tapé. Avant, EAM ne faisait que noter le réglage. Le joueur doit être connecté.
+- « Ajouter un serveur » : choix du jeu (Empyrion ; Vita Somnium Life bientôt), import d'un serveur existant / EAH en haut, installation d'un nouveau serveur en dessous.
+- La mise à jour d'EAM est refusée pendant la copie, l'installation ou la mise à jour d'un serveur (elle les couperait).
+- Éditeur des options : il indique où changer le nom du serveur (bouton « Renommer »).
+
 ## 0.9.36 (2026-11-14) - Import des très gros serveurs
 - Corrigé : « Analyser » ne répondait jamais pour un serveur avec une très grosse sauvegarde (RE1 : 2,3 millions de fichiers, 9 minutes rien que pour les lister ; la page était coupée avant). L'analyse répond maintenant tout de suite.
 - La copie mesure la taille et vérifie la place libre en arrière-plan, puis copie plusieurs fichiers à la fois. L'avancement est affiché dans la liste des serveurs.
