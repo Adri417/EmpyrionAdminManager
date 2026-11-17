@@ -564,7 +564,8 @@ public static class EahImporter
             if (r.Str("EntranceMessage") is { Length: > 0 } msg && !com.PlayfieldMessages.Any(m => m.Playfield.Equals(pf, StringComparison.OrdinalIgnoreCase)))
                 com.PlayfieldMessages.Add(new PlayfieldMessage { Playfield = pf, Text = msg });
         }
-        if (limits > 0) report.Add("limits", limits);
+        world.Compact();
+        if (limits > 0) report.Add("limits", world.Limits.Count);
         if (world.AutoWipe.Count > 0) report.Add("autoWipes", world.AutoWipe.Count);
         SaveFeature(data, "world", world, report);
         SaveFeature(data, "community", com, report);

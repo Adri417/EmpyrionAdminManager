@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.40 (2026-11-17) - EAM plus rapide après un import EAH
+- Corrigé : l'import EAH créait une règle de limite (et de wipe auto) par playfield. Sur RE1 le réglage « Monde/Structures » pesait 282 Mo et EAM le relisait souvent, d'où la lenteur. Les règles identiques sont maintenant regroupées en une seule (liste de playfields), automatiquement, au premier chargement. Rien n'est perdu.
+
 ## 0.9.39 (2026-11-17) - Vita Somnium Life
 - Nouveau jeu : **Vita Somnium Life**. « Ajouter un serveur » > Jeu « Vita Somnium Life » : EAM l'installe avec SteamCMD (app 5164760), écrit server_config.json (nom, port de jeu, port de requête Steam, joueurs max, mot de passe) et databaseinfo.json (base MySQL à créer avant, vide).
 - Démarrage, arrêt propre (EAM tape « stop » dans la console du serveur), redémarrage après plantage, console et journal du jeu.

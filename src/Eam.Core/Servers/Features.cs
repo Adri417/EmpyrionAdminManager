@@ -25,8 +25,13 @@ public static class FeatureStore
     {
         var raw = data.Setting("feature." + key);
         if (string.IsNullOrEmpty(raw)) return new T();
-        try { return JsonSerializer.Deserialize<T>(raw, Json) ?? new T(); }
+        T value;
+        try { value = JsonSerializer.Deserialize<T>(raw, Json) ?? new T(); }
         catch (JsonException) { return new T(); }
+        // Old EAH imports wrote one rule per playfield (hundreds of MB on big servers): merge them once.
+        if (value is WorldSettings w && w.Compact())
+            data.SetSetting("feature." + key, JsonSerializer.Serialize(value, Json));
+        return value;
     }
 
     public static void Save<T>(ServerData data, string key, T value) where T : IFeatureSettings
@@ -38,10 +43,18 @@ public static class FeatureStore
     internal static void Need(bool ok, string code) { if (!ok) throw new FormatException(code); }
 
     /// <summary>"Akua, Omicron*" style list: names or prefixes ending with *; empty = every playfield.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> PatternCache = new();
+
     public static bool MatchesPlayfield(string patterns, string playfield)
     {
         if (string.IsNullOrWhiteSpace(patterns)) return true;
-        foreach (var p in patterns.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        if (!PatternCache.TryGetValue(patterns, out var list))
+        {
+            list = patterns.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (PatternCache.Count > 512) PatternCache.Clear();
+            PatternCache[patterns] = list;
+        }
+        foreach (var p in list)
         {
             if (p.EndsWith('*') ? playfield.StartsWith(p[..^1], StringComparison.OrdinalIgnoreCase) : string.Equals(p, playfield, StringComparison.OrdinalIgnoreCase))
                 return true;
@@ -136,6 +149,43 @@ public sealed class WorldSettings : IFeatureSettings
     /// <summary>Player structures nobody visited for this many hours are given to <see cref="PublicFaction"/> (0 = never).</summary>
     public int UntouchedPublicHours { get; set; }
     public string PublicFaction { get; set; } = "";
+
+    /// <summary>
+    /// Merges rules that only differ by playfield into one rule listing those playfields, and drops duplicates.
+    /// Returns true when something changed.
+    /// </summary>
+    public bool Compact()
+    {
+        var limits = Limits
+            .GroupBy(l => (l.Scope, l.Type, l.MaxCount, l.MaxClass, l.MaxBlocks))
+            .Select(g => new LimitRule { Scope = g.Key.Scope, Type = g.Key.Type, MaxCount = g.Key.MaxCount, MaxClass = g.Key.MaxClass, MaxBlocks = g.Key.MaxBlocks, Playfields = JoinPlayfields(g.Select(l => l.Playfields)) })
+            .ToList();
+        var wipes = AutoWipe
+            .GroupBy(w => (w.Type, w.NotVisitedDays, w.OlderThanHours, w.OnPlayfieldHours))
+            .Select(g => new AutoWipeRule { Type = g.Key.Type, NotVisitedDays = g.Key.NotVisitedDays, OlderThanHours = g.Key.OlderThanHours, OnPlayfieldHours = g.Key.OnPlayfieldHours, Playfields = JoinPlayfields(g.Select(w => w.Playfields)) })
+            .ToList();
+        var changed = limits.Count != Limits.Count || wipes.Count != AutoWipe.Count
+            || limits.Zip(Limits).Any(p => p.First.Playfields != p.Second.Playfields)
+            || wipes.Zip(AutoWipe).Any(p => p.First.Playfields != p.Second.Playfields);
+        if (!changed) return false;
+        Limits = limits;
+        AutoWipe = wipes;
+        return true;
+    }
+
+    /// <summary>Empty (= every playfield) wins; otherwise the distinct names, in their first order.</summary>
+    private static string JoinPlayfields(IEnumerable<string> lists)
+    {
+        var all = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var list in lists)
+        {
+            if (string.IsNullOrWhiteSpace(list)) return "";
+            foreach (var p in list.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (seen.Add(p)) all.Add(p);
+        }
+        return string.Join(", ", all);
+    }
 
     public void Validate()
     {
