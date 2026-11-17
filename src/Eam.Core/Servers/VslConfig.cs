@@ -55,6 +55,33 @@ public static class VslConfig
         return new Database(S("host"), int.TryParse(S("port"), out var p) ? p : 3306, S("database"), S("username"), null);
     }
 
+    /// <summary>The MySQL connection with its password, for EAM's own use only (never sent to a browser).</summary>
+    public static (Database Db, string Password)? ReadDatabaseWithPassword(ServerDefinition def)
+    {
+        var db = ReadDatabase(def);
+        if (db is null) return null;
+        var pw = Load(def.VslDatabaseFile)["password"]?.GetValue<object>()?.ToString() ?? "";
+        return (db, pw);
+    }
+
+    public static bool HasPassword(ServerDefinition def) =>
+        Load(def.VslDatabaseFile)["password"]?.GetValue<object>()?.ToString() is { Length: > 0 };
+
+    /// <summary>Keys EAM writes itself from the server's settings (name, ports): edited with Rename and Settings.</summary>
+    public static readonly string[] ManagedKeys = ["serverName", "port", "queryPort"];
+
+    /// <summary>Writes every given key of server_config.json except the managed ones; unknown keys are kept.</summary>
+    public static void ApplyRaw(ServerDefinition def, JsonObject changes)
+    {
+        var j = Load(def.VslConfigFile);
+        foreach (var (k, v) in changes)
+        {
+            if (ManagedKeys.Contains(k) || string.IsNullOrWhiteSpace(k) || k.Length > 100) continue;
+            j[k] = v?.DeepClone();
+        }
+        Save(def.VslConfigFile, j);
+    }
+
     /// <summary>Writes the MySQL connection (password only when given, so it is never shown back).</summary>
     public static void WriteDatabase(ServerDefinition def, Database db)
     {

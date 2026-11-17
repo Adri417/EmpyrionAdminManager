@@ -4,6 +4,7 @@ import { html, raw, mount, $, $$, toast } from "./dom.js";
 import { liveEvent, fetchLive, renderLive, renderChat, playerCount, live } from "./live.js";
 import { toolsEvent, toolTabs, renderTool } from "./tools.js";
 import { importDialog } from "./importer.js";
+import { vslTabs, isVslTab, renderVsl, renderOnline } from "./vsl.js";
 import { featureTabs, isFeatureTab, renderFeature, featureEvent } from "./features.js";
 
 extend({
@@ -274,7 +275,7 @@ export async function renderServerDetail(page, id, setTitle) {
       return;
     }
     mount(page, html`<div id="srv-notice"></div>
-      <nav class="tabs">${(s.game === "vsl" ? ["overview", ...(admin ? ["console", "settings", "logs"] : [])]
+      <nav class="tabs">${(s.game === "vsl" ? ["overview", ...vslTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])]
         : ["overview", "chat", ...toolTabs(store.me.role), ...featureTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])]).map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
@@ -330,7 +331,7 @@ export async function renderServerDetail(page, id, setTitle) {
         <dt>${t("srv_max_players")}</dt><dd>${s.maxPlayers ?? "—"}</dd>
         ${s.startedUtc ? html`<dt>${t("since")}</dt><dd>${new Date(s.startedUtc).toLocaleString()}</dd>` : ""}
       </dl></div>`);
-      if (s.game === "vsl") mount($("#live", el), html`<div class="card"><div class="hint">${t("vsl_update_auto")}</div></div>`);
+      if (s.game === "vsl") { mount($("#live", el), html`<div id="vsl-online"></div><div class="card"><div class="hint">${t("vsl_update_auto")}</div></div>`); if (s.state === "Running") renderOnline($("#vsl-online", el), s); }
       else renderLive($("#live", el), s);
       if (atLeast(store.me.role, "moderator")) drawWarnings(el, s);
     } else if (tab === "chat") {
@@ -340,6 +341,11 @@ export async function renderServerDetail(page, id, setTitle) {
       if (el.dataset.tab === tab) return; // these screens refresh themselves
       el.dataset.tab = tab;
       renderTool(tab, el, s, store.me);
+      return;
+    } else if (s.game === "vsl" && isVslTab(tab)) {
+      if (el.dataset.tab === tab) return; // these screens refresh themselves
+      el.dataset.tab = tab;
+      renderVsl(tab, el, s, store.me);
       return;
     } else if (isFeatureTab(tab, store.me.role)) {
       if (el.dataset.tab === tab) return; // these screens refresh themselves

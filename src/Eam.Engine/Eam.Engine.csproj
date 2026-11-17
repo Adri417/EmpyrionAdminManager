@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Certes" Version="3.0.4" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <PackageReference Include="MySqlConnector" Version="2.4.0" />
   </ItemGroup>
   <ItemGroup>
     <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

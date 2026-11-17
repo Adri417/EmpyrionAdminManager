@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.41 (2026-11-17) - Vita Somnium Life : joueurs, configuration, base de données
+- Onglet **Configuration** : toutes les clés de server_config.json (joueurs max, mot de passe, carte, région, tags, whitelist, serverId…) et la connexion à la base (databaseinfo.json). Le nom et les ports restent sur « Renommer » et « Réglages ».
+- Onglet **Joueurs** : qui est en ligne (port de requête Steam, aucune requête au jeu) et la table des joueurs de la base du jeu.
+- Onglet **Base de données** : toutes les tables du jeu, lues directement dans MySQL (le jeu crée ses tables au premier démarrage). Recherche, pages, et modification d'une ligne en un clic : argent, rôle admin, accès police ou médecin… Chaque modification est notée dans le journal EAM avec l'ancienne valeur.
+
 ## 0.9.40 (2026-11-17) - EAM plus rapide après un import EAH
 - Corrigé : l'import EAH créait une règle de limite (et de wipe auto) par playfield. Sur RE1 le réglage « Monde/Structures » pesait 282 Mo et EAM le relisait souvent, d'où la lenteur. Les règles identiques sont maintenant regroupées en une seule (liste de playfields), automatiquement, au premier chargement. Rien n'est perdu.
 
