@@ -24,7 +24,7 @@ public static class Certificates
         }
 
         using var rsa = RSA.Create(2048);
-        var req = new CertificateRequest($"CN={Environment.MachineName}, O=Empyrion Admin Manager", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var req = new CertificateRequest($"CN={Environment.MachineName}, O=Easy Admin Manager", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         var san = new SubjectAlternativeNameBuilder();
         san.AddDnsName(Environment.MachineName);
         san.AddDnsName("localhost");

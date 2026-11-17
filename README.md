@@ -1,4 +1,4 @@
-# Empyrion Admin Manager (EAM)
+# Easy Admin Manager (EAM)
 
 **English** · [Français](#français)
 

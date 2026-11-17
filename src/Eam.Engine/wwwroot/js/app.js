@@ -15,7 +15,7 @@ const atLeast = (role, required) => ROLES.indexOf(role) <= ROLES.indexOf(require
 const brand = () => html`
   <div class="brand">
     <img src="/favicon.svg" alt="">
-    <div><div class="brand-name">Empyrion Admin Manager</div><div class="brand-sub">${t("tagline")}</div></div>
+    <div><div class="brand-name">Easy Admin Manager</div><div class="brand-sub">${t("tagline")}</div></div>
   </div>`;
 
 // ---------------------------------------------------------------- start

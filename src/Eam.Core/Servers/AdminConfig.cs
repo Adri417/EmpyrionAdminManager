@@ -48,7 +48,7 @@ public sealed class AdminConfig
     {
         if (steamId.Length is < 5 or > 20 || !steamId.All(char.IsDigit)) throw new FormatException("invalid_steam_id");
         if (permission != 0 && !Permissions.Contains(permission)) throw new FormatException("invalid_permission");
-        var lines = File.Exists(file) ? File.ReadAllLines(file).ToList() : ["---", "# Admin configuration (managed by Empyrion Admin Manager for the Elevated list)"];
+        var lines = File.Exists(file) ? File.ReadAllLines(file).ToList() : ["---", "# Admin configuration (managed by Easy Admin Manager for the Elevated list)"];
         var players = ReadElevated(file).Where(p => p.SteamId != steamId).ToList();
         if (permission != 0) players.Add(new ElevatedPlayer(steamId, permission));
 

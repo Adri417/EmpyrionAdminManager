@@ -1,4 +1,4 @@
-# Empyrion Admin Manager - Windows service management (run as administrator).
+# Easy Admin Manager - Windows service management (run as administrator).
 param([Parameter(Mandatory)][ValidateSet('install','uninstall')][string]$Action)
 $ErrorActionPreference = 'Stop'
 $name = 'EmpyrionAdminManager'
@@ -16,8 +16,8 @@ try {
             if ($existing.Status -ne 'Stopped') { Stop-Service $name -Force; $existing.WaitForStatus('Stopped', '00:01:00') }
             sc.exe config $name binPath= "`"$exe`"" start= delayed-auto | Out-Null
         } else {
-            New-Service -Name $name -BinaryPathName "`"$exe`"" -DisplayName 'Empyrion Admin Manager' `
-                -Description 'Moteur Empyrion Admin Manager : gestion des serveurs Empyrion / Empyrion server management engine' `
+            New-Service -Name $name -BinaryPathName "`"$exe`"" -DisplayName 'Easy Admin Manager' `
+                -Description 'Moteur Easy Admin Manager : gestion des serveurs Empyrion / Empyrion server management engine' `
                 -StartupType Automatic | Out-Null
             sc.exe config $name start= delayed-auto | Out-Null
         }

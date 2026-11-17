@@ -5,7 +5,7 @@ namespace Eam.Core;
 /// <summary>General information about the application.</summary>
 public static class AppInfo
 {
-    public const string Name = "Empyrion Admin Manager";
+    public const string Name = "Easy Admin Manager";
     public const string ShortName = "EAM";
     public const string ServiceName = "EmpyrionAdminManager";
 

@@ -24,7 +24,7 @@ public sealed partial class DedicatedYaml
 
     /// <summary>Minimal configuration used when the game's own template is not available.</summary>
     public static DedicatedYaml Default() => Parse("""
-        # Created by Empyrion Admin Manager. Steam updates do not touch this file.
+        # Created by Easy Admin Manager. Steam updates do not touch this file.
         ServerConfig:
             Srv_Port: 30000
             Srv_Name: My Empyrion Server

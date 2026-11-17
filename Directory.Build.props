@@ -3,9 +3,9 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.9.37</Version>
-    <Product>Empyrion Admin Manager</Product>
-    <Company>Empyrion Admin Manager contributors</Company>
+    <Version>0.9.38</Version>
+    <Product>Easy Admin Manager</Product>
+    <Company>Easy Admin Manager contributors</Company>
     <Copyright>MIT License</Copyright>
     <InvariantGlobalization>true</InvariantGlobalization>
     <ServerGarbageCollection>false</ServerGarbageCollection>

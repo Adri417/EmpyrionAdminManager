@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 
 // ---------------------------------------------------------------------------
-// Empyrion Admin Manager engine.
+// Easy Admin Manager engine.
 // Runs as a Windows service (or in a console window for testing) and serves
 // the interface used by both the desktop window and remote browsers.
 // ---------------------------------------------------------------------------

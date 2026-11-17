@@ -88,7 +88,7 @@ public sealed class DiscordService : BackgroundService
         var s = Settings(def);
         if (s.DiscordToken.Length == 0) throw new ServerException("discord_token_missing");
         foreach (var ch in new[] { s.DiscordPublicChannel, s.DiscordAdminChannel }.Concat(s.DiscordFactionChannels.Select(f => f.ChannelId)).Where(c => c.Length > 0).Distinct())
-            await SendAsync(s.DiscordToken, ch, $"✅ Empyrion Admin Manager — {Safe(def.Name)}");
+            await SendAsync(s.DiscordToken, ch, $"✅ Easy Admin Manager — {Safe(def.Name)}");
     }
 
     private async Task OnChatAsync(ServerDefinition def, ChatEntry entry, LivePlayer? sender)

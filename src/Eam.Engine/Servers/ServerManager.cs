@@ -1043,7 +1043,7 @@ public sealed class ServerManager : BackgroundService
                     File.Copy(file, target, overwrite: true);
             }
             var cfg = Path.Combine(def.ModDir, "eam-link.cfg");
-            var content = $"# Written by Empyrion Admin Manager. Local link only (127.0.0.1).\r\nport={def.ModPort}\r\nkey={def.ModKey}\r\n";
+            var content = $"# Written by Easy Admin Manager. Local link only (127.0.0.1).\r\nport={def.ModPort}\r\nkey={def.ModKey}\r\n";
             File.WriteAllText(cfg + ".tmp", content);
             File.Move(cfg + ".tmp", cfg, overwrite: true);
         }

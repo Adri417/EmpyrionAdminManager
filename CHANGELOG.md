@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.38 (2026-11-17) - Easy Admin Manager
+- Le logiciel s'appelle maintenant **Easy Admin Manager** (toujours EAM). Le nom des fichiers, du service Windows et des mises à jour ne change pas : rien à refaire sur un serveur déjà installé.
+
 ## 0.9.37 (2026-11-17) - Vrai god mode, ajout de serveur
 - God mode depuis EAM : c'est maintenant le vrai god mode du jeu (« gm »), lancé dans la console du joueur comme s'il l'avait tapé. Avant, EAM ne faisait que noter le réglage. Le joueur doit être connecté.
 - « Ajouter un serveur » : choix du jeu (Empyrion ; Vita Somnium Life bientôt), import d'un serveur existant / EAH en haut, installation d'un nouveau serveur en dessous.

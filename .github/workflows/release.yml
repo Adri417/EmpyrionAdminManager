@@ -1,6 +1,6 @@
 name: Release
 
-# Builds Empyrion Admin Manager for Windows and publishes the zip as a GitHub release.
+# Builds Easy Admin Manager for Windows and publishes the zip as a GitHub release.
 # Runs on every push to main: when the version in Directory.Build.props has no release yet,
 # the release vX.Y.Z is created automatically (with its tag). Can also be started by hand.
 on:
@@ -56,4 +56,4 @@ jobs:
 
           Telechargez $($zip.Name), decompressez-le et lancez EmpyrionAdminManager.exe. Essayez-le d'abord sur un serveur de test. Tutoriel dans le README, nouveautes dans CHANGELOG.md.
           "@
-          gh release create $tag $zip.FullName --target $env:GITHUB_SHA --title "Empyrion Admin Manager ${{ steps.v.outputs.version }}" --notes $notes
+          gh release create $tag $zip.FullName --target $env:GITHUB_SHA --title "Easy Admin Manager ${{ steps.v.outputs.version }}" --notes $notes

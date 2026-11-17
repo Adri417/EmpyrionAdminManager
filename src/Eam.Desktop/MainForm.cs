@@ -41,7 +41,7 @@ internal sealed class MainForm : Form
         Controls.Add(_web);
         Controls.Add(_status);
         _web.Visible = false;
-        _status.Text = "Empyrion Admin Manager";
+        _status.Text = "Easy Admin Manager";
         Shown += async (_, _) => await StartAsync();
         FormClosing += OnClosing;
     }

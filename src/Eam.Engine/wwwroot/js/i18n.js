@@ -1,7 +1,7 @@
 // Interface texts. Add a language by copying the "en" block.
 const dict = {
   fr: {
-    tagline: "Administration de serveurs Empyrion",
+    tagline: "Administration de serveurs de jeu",
     setup_title: "Bienvenue",
     setup_lead: "Créez le compte administrateur principal. Il aura tous les droits.",
     setup_remote: "La création du premier compte se fait uniquement sur la machine où EAM est installé.",
@@ -53,7 +53,7 @@ const dict = {
     days: "j", hours: "h", minutes: "min",
   },
   en: {
-    tagline: "Empyrion server administration",
+    tagline: "Game server administration",
     setup_title: "Welcome",
     setup_lead: "Create the main administrator account. It will have every permission.",
     setup_remote: "The first account can only be created on the machine where EAM is installed.",
