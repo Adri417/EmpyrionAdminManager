@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.42 (2026-11-18) - Vita Somnium Life : réinitialiser le serveur
+- Bouton **Réinitialiser** sur un serveur Vita Somnium Life arrêté (propriétaire seulement) : vide toute la base de données du jeu (joueurs, argent, rôles, métiers…). Les tables restent et la configuration n'est pas touchée. Il faut taper le nom du serveur pour confirmer.
+- Avant d'effacer, EAM enregistre une copie de toutes les lignes dans eam\vsl-reset-backups (fichier .json.gz).
+
 ## 0.9.41 (2026-11-17) - Vita Somnium Life : joueurs, configuration, base de données
 - Onglet **Configuration** : toutes les clés de server_config.json (joueurs max, mot de passe, carte, région, tags, whitelist, serverId…) et la connexion à la base (databaseinfo.json). Le nom et les ports restent sur « Renommer » et « Réglages ».
 - Onglet **Joueurs** : qui est en ligne (port de requête Steam, aucune requête au jeu) et la table des joueurs de la base du jeu.

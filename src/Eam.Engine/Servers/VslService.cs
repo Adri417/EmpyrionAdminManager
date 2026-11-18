@@ -14,7 +14,7 @@ public sealed record VslRowUpdate(Dictionary<string, JsonElement> Key, Dictionar
 /// Vita Somnium Life: every key of server_config.json, the database connection, and the game's own MySQL data
 /// (read from information_schema: the game creates its tables itself on first start).
 /// </summary>
-public sealed class VslService(ServerStore store)
+public sealed class VslService(ServerStore store, ServerManager manager)
 {
     private ServerDefinition Get(long id)
     {
@@ -226,6 +226,76 @@ public sealed class VslService(ServerStore store)
         var changes = string.Join(", ", req.Set.Keys.Select((n, i) => $"{n}: {old[0][i] ?? "NULL"} -> {req.Set[n]}"));
         ServerManager.ServerLog(def, $"Database {table} ({keyText}) changed by {by}: {changes}");
         return new { changed = 1 };
+    }
+
+    /// <summary>
+    /// Empties every table of the game's database (the structure stays: the game finds its tables at the next start).
+    /// The server must be stopped. All rows are first saved in eam\vsl-reset-backups\&lt;time&gt;.json.gz.
+    /// </summary>
+    public async Task<object> ResetDatabaseAsync(long id, string confirmName, string by)
+    {
+        var def = Get(id);
+        if (!string.Equals(confirmName?.Trim(), def.Name, StringComparison.Ordinal)) throw new ServerException("confirm_name_mismatch");
+        var state = manager.Runtime(id).State;
+        if (state is not (ServerState.Stopped or ServerState.Crashed or ServerState.NotInstalled)) throw new ServerException("vsl_reset_running");
+        await using var c = await OpenAsync(def);
+        var tables = (await SchemaAsync(c)).Keys.ToList();
+
+        var dir = Path.Combine(def.EamDir, "vsl-reset-backups");
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json.gz");
+        long saved = 0;
+        await using (var fs = File.Create(file))
+        await using (var gz = new System.IO.Compression.GZipStream(fs, System.IO.Compression.CompressionLevel.Fastest))
+        await using (var w = new Utf8JsonWriter(gz))
+        {
+            w.WriteStartObject();
+            w.WriteString("database", c.Database);
+            w.WriteString("utc", DateTime.UtcNow.ToString("O"));
+            w.WriteStartObject("tables");
+            foreach (var t in tables)
+            {
+                await using var cmd = c.CreateCommand();
+                cmd.CommandText = $"SELECT * FROM {Q(t)};";
+                await using var r = await cmd.ExecuteReaderAsync();
+                w.WriteStartArray(t);
+                while (await r.ReadAsync())
+                {
+                    w.WriteStartObject();
+                    for (var i = 0; i < r.FieldCount; i++)
+                    {
+                        w.WritePropertyName(r.GetName(i));
+                        var v = r.IsDBNull(i) ? null : r.GetValue(i);
+                        if (v is byte[] b) w.WriteStringValue("base64:" + Convert.ToBase64String(b));
+                        else JsonSerializer.Serialize(w, Cell(v));
+                    }
+                    w.WriteEndObject();
+                    saved++;
+                }
+                w.WriteEndArray();
+            }
+            w.WriteEndObject();
+            w.WriteEndObject();
+        }
+
+        await using (var cmd = c.CreateCommand())
+        {
+            try
+            {
+                cmd.CommandText = "SET FOREIGN_KEY_CHECKS = 0;";
+                await cmd.ExecuteNonQueryAsync();
+                foreach (var t in tables)
+                {
+                    cmd.CommandText = $"TRUNCATE TABLE {Q(t)};";
+                    try { await cmd.ExecuteNonQueryAsync(); }
+                    catch (MySqlException) { cmd.CommandText = $"DELETE FROM {Q(t)};"; await cmd.ExecuteNonQueryAsync(); }
+                }
+            }
+            catch (MySqlException e) { throw new ServerException("vsl_db_refused", e.Message); }
+            finally { cmd.CommandText = "SET FOREIGN_KEY_CHECKS = 1;"; await cmd.ExecuteNonQueryAsync(); }
+        }
+        ServerManager.ServerLog(def, $"Database reset by {by}: {tables.Count} tables emptied, {saved} rows saved in {file}");
+        return new { tables = tables.Count, rows = saved, backup = file };
     }
 
     private static object? Value(JsonElement e) => e.ValueKind switch

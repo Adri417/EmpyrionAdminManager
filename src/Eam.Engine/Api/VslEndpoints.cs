@@ -19,12 +19,16 @@ public static class VslEndpoints
             Run(() => { v.SaveDatabase(id, req, By(c)); return Task.FromResult(Ok); })).RequireAuthorization(Roles.Owner);
 
         g.MapGet("/online", (long id, VslService v) => Run(() => v.OnlineAsync(id))).RequireAuthorization(Roles.Viewer);
+        g.MapPost("/db/reset", (long id, VslResetRequest req, VslService v, HttpContext c) =>
+            Run(() => v.ResetDatabaseAsync(id, req.ConfirmName, By(c)))).RequireAuthorization(Roles.Owner);
         g.MapGet("/db/tables", (long id, VslService v) => Run(() => v.TablesAsync(id))).RequireAuthorization(Roles.Admin);
         g.MapGet("/db/rows", (long id, string table, string? q, int? offset, int? limit, VslService v) =>
             Run(() => v.RowsAsync(id, table, q, offset ?? 0, limit ?? 50))).RequireAuthorization(Roles.Admin);
         g.MapPut("/db/rows", (long id, string table, VslRowUpdate req, VslService v, HttpContext c) =>
             Run(() => v.UpdateRowAsync(id, table, req, By(c)))).RequireAuthorization(Roles.Admin);
     }
+
+    public sealed record VslResetRequest(string ConfirmName);
 
     private static readonly object Ok = new { ok = true };
 

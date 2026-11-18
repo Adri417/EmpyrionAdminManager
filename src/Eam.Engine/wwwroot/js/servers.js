@@ -4,7 +4,7 @@ import { html, raw, mount, $, $$, toast } from "./dom.js";
 import { liveEvent, fetchLive, renderLive, renderChat, playerCount, live } from "./live.js";
 import { toolsEvent, toolTabs, renderTool } from "./tools.js";
 import { importDialog } from "./importer.js";
-import { vslTabs, isVslTab, renderVsl, renderOnline } from "./vsl.js";
+import { vslTabs, isVslTab, renderVsl, renderOnline, vslResetDialog } from "./vsl.js";
 import { featureTabs, isFeatureTab, renderFeature, featureEvent } from "./features.js";
 
 extend({
@@ -295,6 +295,7 @@ export async function renderServerDetail(page, id, setTitle) {
     if (s.installed && ["Stopped", "Crashed"].includes(s.state)) b.push(["update", "act_update", ""], ["validate", "act_validate", ""]);
     if (["Running", "Starting", "Stopping", "Crashed"].includes(s.state)) b.push(["kill", "act_kill", "danger"]);
     if (s.autoRestartSuspended) b.push(["resume", "act_resume", ""]);
+    if (owner && s.game === "vsl" && s.installed && ["Stopped", "Crashed"].includes(s.state)) b.push(["vslreset", "act_vsl_reset", "danger"]);
     if (owner && ["Stopped", "Crashed", "NotInstalled"].includes(s.state)) b.push(["rename", "act_rename", ""], ["delete", "act_delete", "danger"]);
     const bar = $("#actions");
     if (!bar) return;
@@ -315,6 +316,7 @@ export async function renderServerDetail(page, id, setTitle) {
       else if (a === "resume") { await api.post(`/api/servers/${id}/resume-auto-restart`); await loadServers(); }
       else if (a === "rename") renameDialog(s);
       else if (a === "delete") deleteDialog(s);
+      else if (a === "vslreset") vslResetDialog(s);
     } catch (ex) { fail(ex); }
   };
 

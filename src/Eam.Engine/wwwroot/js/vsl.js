@@ -7,6 +7,9 @@ import { dialog, fail, atLeast } from "./ui.js";
 extend({
   fr: {
     vo_title: "En ligne : {0} / {1}", vo_none: "Personne en ligne.", vo_no_answer: "Le serveur ne répond pas encore sur son port de requête Steam.",
+    act_vsl_reset: "Réinitialiser", vr_title: "Réinitialiser le serveur", vr_text: "Toutes les données du jeu sont effacées de la base MySQL : joueurs, argent, rôles, métiers, objets… Les tables restent, le serveur repart à zéro à son prochain démarrage. La configuration n'est pas touchée.",
+    vr_backup: "Avant d'effacer, EAM enregistre une copie de toutes les lignes dans le dossier eam\\vsl-reset-backups du serveur.", vr_confirm: "Tapez le nom du serveur pour confirmer : {0}",
+    vr_done: "Base vidée : {0} tables, {1} lignes sauvegardées avant effacement.", err_vsl_reset_running: "Arrêtez d'abord le serveur.",
     tab_vsl_players: "Joueurs", tab_vsl_data: "Base de données", tab_vsl_config: "Configuration",
     vc_title: "server_config.json", vc_hint: "Toutes les clés du fichier de configuration du serveur. Le nom et les ports se changent avec « Renommer » et « Réglages ». S'applique au prochain démarrage.",
     vc_managed: "géré par EAM", vc_lines: "une valeur par ligne", vc_json: "JSON", vc_saved: "Configuration enregistrée. Redémarrez le serveur pour l'appliquer.",
@@ -23,6 +26,9 @@ extend({
   },
   en: {
     vo_title: "Online: {0} / {1}", vo_none: "Nobody online.", vo_no_answer: "The server does not answer on its Steam query port yet.",
+    act_vsl_reset: "Reset", vr_title: "Reset the server", vr_text: "Every game data is erased from the MySQL database: players, money, roles, jobs, items… The tables stay, the server starts from zero at its next start. The configuration is not touched.",
+    vr_backup: "Before erasing, EAM saves a copy of every row in the server's eam\\vsl-reset-backups folder.", vr_confirm: "Type the server name to confirm: {0}",
+    vr_done: "Database emptied: {0} tables, {1} rows saved before erasing.", err_vsl_reset_running: "Stop the server first.",
     tab_vsl_players: "Players", tab_vsl_data: "Database", tab_vsl_config: "Configuration",
     vc_title: "server_config.json", vc_hint: "Every key of the server configuration file. Name and ports are changed with \"Rename\" and \"Settings\". Applies at the next start.",
     vc_managed: "managed by EAM", vc_lines: "one value per line", vc_json: "JSON", vc_saved: "Configuration saved. Restart the server to apply it.",
@@ -212,4 +218,14 @@ function editRow(s, table, cols, row, reload) {
     toast(t("vb_changed"));
     reload();
   }, t("save"), false, true);
+}
+
+// ------------------------------------------------------------------ reset (empty the database)
+
+export function vslResetDialog(s) {
+  dialog(t("vr_title"), html`<p>${t("vr_text")}</p><div class="hint">${t("vr_backup")}</div>
+    <label>${t("vr_confirm", s.name)}</label><input name="confirm" autocomplete="off" required>`, async (f) => {
+    const r = await api.post(`/api/servers/${s.id}/vsl/db/reset`, { confirmName: f.confirm.value });
+    toast(t("vr_done", r.tables, r.rows));
+  }, t("act_vsl_reset"), true);
 }
