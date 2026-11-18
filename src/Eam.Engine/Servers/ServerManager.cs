@@ -677,40 +677,32 @@ public sealed class ServerManager : BackgroundService
         var exe = Path.Combine(def.GameDir, GameKinds.VslExe);
         if (!File.Exists(exe)) throw new ServerException("game_files_missing", exe);
         Directory.CreateDirectory(def.LogsDir);
-        var psi = new ProcessStartInfo(exe)
-        {
-            WorkingDirectory = def.GameDir,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            // Only the console input is kept (to type "stop"). The output goes to Unity's own log file, never
-            // through EAM: if EAM restarts (update), the game never writes into a closed pipe.
-            RedirectStandardInput = true,
-        };
-        psi.ArgumentList.Add("-batchmode");
-        psi.ArgumentList.Add("-nographics");
-        psi.ArgumentList.Add("-logFile");
-        psi.ArgumentList.Add(def.VslLogFile);
         // Unity rewrites its log file at each start: the previous one is kept beside it.
         try { if (File.Exists(def.VslLogFile)) File.Move(def.VslLogFile, Path.Combine(def.LogsDir, "game-previous.log"), true); } catch { }
-        var proc = Process.Start(psi) ?? throw new ServerException("start_failed");
+        // Started through the console host: it keeps the console input open when EAM restarts. The output goes to
+        // Unity's own log file, never through EAM.
+        var proc = VslHost.Start(def, exe, def.VslLogFile, out var direct);
         rt.Owned?.Dispose();
-        rt.Owned = proc;
-        rt.ProcessId = proc.Id;
+        rt.Owned = direct ? proc : null;
+        rt.ProcessId = null; // the game's own PID is found by the monitor
         rt.WantRunning = true;
         rt.State = ServerState.Starting;
         rt.StartRequestedUtc = DateTime.UtcNow;
         rt.LastError = null;
-        ServerLog(def, $"Start requested by {by} (Vita Somnium Life, PID {proc.Id})");
+        ServerLog(def, $"Start requested by {by} (Vita Somnium Life, console host PID {proc.Id})");
         _log.LogInformation("{By} started server '{Name}'", by, def.Name);
         await Task.CompletedTask;
     }
 
-    /// <summary>Vita Somnium Life: a line typed in the server's own console (only for a server EAM started).</summary>
-    private static bool VslType(ServerRuntime rt, string line)
+    /// <summary>Vita Somnium Life: a line typed in the server's own console (through its console host, see <see cref="VslHost"/>).</summary>
+    private static bool VslType(ServerDefinition def, ServerRuntime rt, string line)
     {
-        if (rt.Owned is not { HasExited: false } p) return false;
-        try { p.StandardInput.WriteLine(line); p.StandardInput.Flush(); return true; }
-        catch { return false; }
+        if (rt.Owned is { HasExited: false } p) // development (not Windows): started directly
+        {
+            try { p.StandardInput.WriteLine(line); p.StandardInput.Flush(); return true; }
+            catch { return false; }
+        }
+        return VslHost.Type(def, line);
     }
 
     /// <summary>Clean stop: warns players, then saveandexit, waits, and only kills as a last resort.</summary>
@@ -784,8 +776,13 @@ public sealed class ServerManager : BackgroundService
         {
             rt.ProgressText = "stop";
             await Push(def.Id);
-            if (VslType(rt, "stop")) ServerLog(def, "\"stop\" typed in the server console");
-            else ServerLog(def, "Console of the server not available (started before EAM's restart): it will be stopped by force");
+            if (VslType(def, rt, "stop")) ServerLog(def, "\"stop\" typed in the server console");
+            else
+            {
+                // Started by an older EAM (before the console host): nothing can reach its console, no reason to wait.
+                ServerLog(def, "Console of the server not available (started before EAM 0.9.43): stopped by force");
+                KillAll(FindGameProcesses(def));
+            }
         }
         else
         {
@@ -863,7 +860,7 @@ public sealed class ServerManager : BackgroundService
         ServerLog(def, $"Console ({by}): {command}");
         if (def.IsVsl)
         {
-            if (!VslType(rt, command)) throw new ServerException("console_unavailable");
+            if (!VslType(def, rt, command)) throw new ServerException("console_unavailable");
             await Task.Delay(1500); // its answer goes to the game log
             return string.Join("\n", GameLogTail(id, 15));
         }

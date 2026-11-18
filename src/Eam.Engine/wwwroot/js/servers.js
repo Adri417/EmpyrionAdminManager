@@ -442,7 +442,7 @@ function stopDialog(s, mode) {
   const dlg = document.createElement("dialog");
   mount(dlg, html`<form method="dialog" id="sd">
     <h3>${t(mode === "restart" ? "restart_title" : "stop_title")}</h3>
-    <label>${t("delay_minutes")}</label><input name="delay" type="number" min="0" max="60" value="${s.state === "Running" ? 5 : 0}">
+    <label>${t("delay_minutes")}</label><input name="delay" type="number" min="0" max="60" value="${s.state === "Running" && s.game !== "vsl" ? 5 : 0}">
     <label>${t("stop_message")}</label><input name="message" type="text" maxlength="120" value="${mode === "restart" ? "Redémarrage du serveur / Server restart" : "Arrêt du serveur / Server shutdown"}">
     <div class="hint">${t("stop_hint")}</div>
     <div class="dialog-actions"><button class="btn" value="cancel" formnovalidate>${t("cancel")}</button>

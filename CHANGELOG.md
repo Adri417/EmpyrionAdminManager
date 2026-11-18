@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.43 (2026-11-18) - Vita Somnium Life : l'arrêt marche aussi après une mise à jour d'EAM
+- Corrigé : après un redémarrage d'EAM (mise à jour automatique), EAM ne pouvait plus taper « stop » dans la console d'un serveur Vita Somnium Life déjà lancé ; l'arrêt attendait puis forçait. Le serveur est maintenant lancé par un petit relais (PowerShell de Windows) qui garde sa console ouverte même quand EAM redémarre.
+- Un serveur lancé avant cette version est arrêté tout de suite par force (au lieu d'attendre), puis relancé normalement.
+- Arrêt d'un serveur Vita Somnium Life : délai par défaut 0 minute (le jeu ne permet pas encore d'avertir les joueurs).
+
 ## 0.9.42 (2026-11-18) - Vita Somnium Life : réinitialiser le serveur
 - Bouton **Réinitialiser** sur un serveur Vita Somnium Life arrêté (propriétaire seulement) : vide toute la base de données du jeu (joueurs, argent, rôles, métiers…). Les tables restent et la configuration n'est pas touchée. Il faut taper le nom du serveur pour confirmer.
 - Avant d'effacer, EAM enregistre une copie de toutes les lignes dans eam\vsl-reset-backups (fichier .json.gz).
