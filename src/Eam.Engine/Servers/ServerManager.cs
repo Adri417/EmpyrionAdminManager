@@ -70,6 +70,14 @@ public sealed class ServerManager : BackgroundService
             yaml.Set("ServerConfig", "Srv_MaxPlayers", (j["maxPlayers"]?.ToString() ?? pend?.MaxPlayers.ToString()));
             yaml.Set("ServerConfig", "Srv_Password", j["password"]?.ToString() ?? pend?.Password);
         }
+        else if (s.IsSatisfactory)
+        {
+            var sf = File.Exists(s.SatisfactorySettingsFile) ? SatisfactoryConfig.Load(s) : null;
+            var pend = ReadPending(s);
+            yaml = DedicatedYaml.Parse("ServerConfig:\n");
+            yaml.Set("ServerConfig", "Srv_MaxPlayers", (sf?.MaxPlayers ?? pend?.MaxPlayers)?.ToString());
+            yaml.Set("ServerConfig", "Srv_Password", sf?.Password ?? pend?.Password);
+        }
         var latestBuilds = _steam.LatestBuildsOf(GameKinds.AppId(s.Game));
         string? yamlValue(string key) => yaml?.Get("ServerConfig", key);
         return new
@@ -193,7 +201,7 @@ public sealed class ServerManager : BackgroundService
             var suggestion = PortAllocator.Suggest(all);
             var gamePort = req.GamePort ?? suggestion.GamePort;
             var telnetPort = req.TelnetPort ?? (req.GamePort is { } gp ? gp + 4 : suggestion.TelnetPort);
-            if (PortAllocator.Check(gamePort, telnetPort, all) is { } portError) throw new ServerException(portError);
+            if (PortAllocator.Check(gamePort, telnetPort, all, game: game) is { } portError) throw new ServerException(portError);
 
             Directory.CreateDirectory(root);
             var def = _store.Add(new ServerDefinition
@@ -213,6 +221,7 @@ public sealed class ServerManager : BackgroundService
                     new VslConfig.Database(req.DbHost ?? "127.0.0.1", req.DbPort ?? 3306, req.DbName!.Trim(), (req.DbUser ?? "root").Trim(), req.DbPassword)));
                 ServerLog(def, $"Server created by {by}: Vita Somnium Life '{name}', game port {gamePort}, query port {telnetPort}");
             }
+            else if (def.IsSatisfactory) ServerLog(def, $"Server created by {by}: Satisfactory '{name}', game port {gamePort} (UDP+TCP), reliable port {telnetPort} (TCP)");
             else ServerLog(def, $"Server created by {by}: '{name}', ports {gamePort}-{gamePort + 3}, telnet {telnetPort}");
             _log.LogInformation("{By} created server '{Name}' in {Root}", by, name, root);
             var rt = Runtime(def.Id);
@@ -400,6 +409,7 @@ public sealed class ServerManager : BackgroundService
                 }
             }
             if (updated.IsVsl) { if (File.Exists(updated.VslConfigFile)) VslConfig.ApplyManaged(updated); }
+            else if (updated.IsSatisfactory) { } // the name is given to the server through its API at the next start
             else if (File.Exists(updated.YamlFile)) DedicatedYaml.Load(updated.YamlFile).Set("ServerConfig", "Srv_Name", updated.ListName).Save(updated.YamlFile);
             _store.Update(updated);
             ServerLog(updated, $"Renamed by {by}: '{def.Name}' -> '{name}' (folder {updated.RootDir}, name in the game list '{updated.ListName}')");
@@ -418,7 +428,7 @@ public sealed class ServerManager : BackgroundService
             {
                 RequireStopped(rt, allowNotInstalled: true);
                 var others = _store.List().Where(s => s.Id != id);
-                if (PortAllocator.Check(req.GamePort, req.TelnetPort, others) is { } e) throw new ServerException(e);
+                if (PortAllocator.Check(req.GamePort, req.TelnetPort, others, game: def.Game) is { } e) throw new ServerException(e);
             }
             var updated = def with
             {
@@ -431,6 +441,24 @@ public sealed class ServerManager : BackgroundService
                 if (File.Exists(updated.VslConfigFile)) { VslConfig.ApplyManaged(updated); VslConfig.ApplySettings(updated, req.MaxPlayers, req.Password); }
                 else WritePending(updated, new PendingSettings(req.MaxPlayers, req.Password, req.Description, req.Public));
             }
+            else if (updated.IsSatisfactory && File.Exists(updated.SatisfactorySettingsFile))
+            {
+                var sf = SatisfactoryConfig.Load(updated);
+                sf.MaxPlayers = req.MaxPlayers;
+                if (req.Password is not null) sf.Password = req.Password.Trim();
+                SatisfactoryConfig.Save(updated, sf);
+                if (req.Password is not null && rt.State == ServerState.Running)
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            if (await SatisfactoryControl.AdminTokenAsync(updated) is { } tok)
+                                await SatisfactoryControl.CallAsync(updated.GamePort, "SetClientPassword", new { password = sf.Password }, tok);
+                        }
+                        catch { }
+                    });
+            }
+            else if (updated.IsSatisfactory) WritePending(updated, new PendingSettings(req.MaxPlayers, req.Password, req.Description, req.Public));
             else if (File.Exists(updated.YamlFile))
             {
                 var y = DedicatedYaml.Load(updated.YamlFile);
@@ -525,6 +553,7 @@ public sealed class ServerManager : BackgroundService
             var build = await _steam.InstallOrUpdateAsync(def.GameDir, def.Branch, validate || firstInstall, progress, line => ServerLog(def, "[steamcmd] " + line), CancellationToken.None, GameKinds.AppId(def.Game));
             var updated = def with { Installed = true, BuildId = build ?? def.BuildId };
             if (updated.IsVsl) PrepareVsl(updated);
+            else if (updated.IsSatisfactory) PrepareSatisfactory(updated);
             else PrepareYaml(updated);
             _store.Update(updated);
             rt.State = ServerState.Stopped;
@@ -560,6 +589,21 @@ public sealed class ServerManager : BackgroundService
             if (db is not null) VslConfig.WriteDatabase(def, db);
             File.Delete(pendingDb);
         }
+    }
+
+    /// <summary>Satisfactory: the settings given at creation become EAM's satisfactory.json.</summary>
+    private static void PrepareSatisfactory(ServerDefinition def)
+    {
+        if (ReadPending(def) is { } p)
+        {
+            var s = SatisfactoryConfig.Load(def);
+            s.MaxPlayers = p.MaxPlayers;
+            if (p.Password is not null) s.Password = p.Password.Trim();
+            SatisfactoryConfig.Save(def, s);
+            File.Delete(PendingFile(def));
+        }
+        else if (!File.Exists(def.SatisfactorySettingsFile)) SatisfactoryConfig.Save(def, new SatisfactoryConfig.Settings());
+        Directory.CreateDirectory(def.SatisfactorySavesDir);
     }
 
     /// <summary>Creates EAM's own dedicated-eam.yaml from the game's template and applies EAM-managed keys.</summary>
@@ -637,6 +681,7 @@ public sealed class ServerManager : BackgroundService
         if (rt.State is ServerState.Running or ServerState.Starting) throw new ServerException("already_running");
         if (FindGameProcesses(def).Count > 0) throw new ServerException("already_running");
         if (def.IsVsl) { await StartVslAsync(def, rt, by); return; }
+        if (def.IsSatisfactory) { await StartSatisfactoryAsync(def, rt, by); return; }
         if (!File.Exists(def.YamlFile)) PrepareYaml(def);
         def = InstallMod(def);
         var busy = def.AllPorts.Where(PortAllocator.IsPortInUse).ToList();
@@ -690,6 +735,39 @@ public sealed class ServerManager : BackgroundService
         rt.StartRequestedUtc = DateTime.UtcNow;
         rt.LastError = null;
         ServerLog(def, $"Start requested by {by} (Vita Somnium Life, console host PID {proc.Id})");
+        _log.LogInformation("{By} started server '{Name}'", by, def.Name);
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Satisfactory: FactoryServer.exe with EAM's ports and max players. Its saves are linked into the server's
+    /// own folder first (see <see cref="SatisfactoryControl.LinkSaves"/>), so only one runs at a time.
+    /// </summary>
+    private async Task StartSatisfactoryAsync(ServerDefinition def, ServerRuntime rt, string by)
+    {
+        PrepareSatisfactory(def);
+        var other = _store.List().FirstOrDefault(o => o.Id != def.Id && o.IsSatisfactory && FindGameProcesses(o).Count > 0);
+        if (other is not null) throw new ServerException("satisfactory_one_running", other.Name);
+        var busy = def.AllPorts.Where(PortAllocator.IsPortInUse).ToList();
+        if (busy.Count > 0) throw new ServerException("port_used_by_program", string.Join(", ", busy));
+        var exe = Path.Combine(def.GameDir, GameKinds.SatisfactoryExe);
+        if (!File.Exists(exe)) throw new ServerException("game_files_missing", exe);
+        SatisfactoryControl.LinkSaves(def, line => ServerLog(def, line));
+        var settings = SatisfactoryConfig.Load(def);
+        var psi = new ProcessStartInfo(exe) { WorkingDirectory = def.GameDir, UseShellExecute = false, CreateNoWindow = true };
+        psi.ArgumentList.Add($"-Port={def.GamePort}");
+        psi.ArgumentList.Add($"-ReliablePort={def.TelnetPort}");
+        psi.ArgumentList.Add($"-ini:Game:[/Script/Engine.GameSession]:MaxPlayers={Math.Clamp(settings.MaxPlayers, 1, 1000)}");
+        psi.ArgumentList.Add("-unattended");
+        Process.Start(psi)?.Dispose();
+        rt.Owned?.Dispose();
+        rt.Owned = null;
+        rt.ProcessId = null;
+        rt.WantRunning = true;
+        rt.State = ServerState.Starting;
+        rt.StartRequestedUtc = DateTime.UtcNow;
+        rt.LastError = null;
+        ServerLog(def, $"Start requested by {by} (Satisfactory, ports {def.GamePort} UDP/TCP and {def.TelnetPort} TCP)");
         _log.LogInformation("{By} started server '{Name}'", by, def.Name);
         await Task.CompletedTask;
     }
@@ -784,6 +862,12 @@ public sealed class ServerManager : BackgroundService
                 KillAll(FindGameProcesses(def));
             }
         }
+        else if (def.IsSatisfactory)
+        {
+            rt.ProgressText = "save";
+            await Push(def.Id);
+            if (!await SatisfactoryControl.SaveAndShutdownAsync(def, line => ServerLog(def, line))) KillAll(FindGameProcesses(def));
+        }
         else
         {
             // Anyone who came back during the last minute.
@@ -864,6 +948,7 @@ public sealed class ServerManager : BackgroundService
             await Task.Delay(1500); // its answer goes to the game log
             return string.Join("\n", GameLogTail(id, 15));
         }
+        if (def.IsSatisfactory) return await SatisfactoryControl.RunCommandAsync(def, command);
         try { return await TelnetClient.SendAsync(def.TelnetPort, def.TelnetPassword, command); }
         catch (Exception e) { throw new ServerException("telnet_failed", e.Message); }
     }
@@ -872,6 +957,7 @@ public sealed class ServerManager : BackgroundService
     {
         var def = Get(id);
         if (def.IsVsl) return File.Exists(def.VslLogFile) ? Tail(def.VslLogFile, lines) : [];
+        if (def.IsSatisfactory) return File.Exists(def.SatisfactoryLogFile) ? Tail(def.SatisfactoryLogFile, lines) : [];
         var logs = Path.Combine(def.GameDir, "Logs");
         if (!Directory.Exists(logs)) return [];
         var newest = Directory.EnumerateFiles(logs, "Dedicated_*.log", SearchOption.AllDirectories)
@@ -948,11 +1034,17 @@ public sealed class ServerManager : BackgroundService
                 }
                 rt.State = ServerState.Starting; rt.WantRunning = true; rt.StartRequestedUtc ??= DateTime.UtcNow;
             }
-            if (rt.State == ServerState.Starting && def.IsVsl && PortAllocator.IsPortInUse(def.GamePort))
+            if (rt.State == ServerState.Starting && !def.IsEmpyrion && PortAllocator.IsPortInUse(def.GamePort))
             {
                 rt.State = ServerState.Running;
                 rt.StartedUtc = DateTime.UtcNow;
                 ServerLog(def, "Server is running (game port open)");
+                if (def.IsSatisfactory)
+                    _ = Task.Run(async () =>
+                    {
+                        try { await SatisfactoryControl.AfterStartAsync(def, line => ServerLog(def, line)); }
+                        catch (Exception e) { ServerLog(def, "Satisfactory: setup after start failed: " + e.Message); }
+                    });
             }
             else if (rt.State == ServerState.Starting && def.IsEmpyrion && await TelnetClient.IsReachableAsync(def.TelnetPort, ct))
             {

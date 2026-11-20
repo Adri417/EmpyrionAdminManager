@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.44 (2026-11-20) - Satisfactory
+- Nouveau jeu : **Satisfactory**. « Ajouter un serveur » > Jeu « Satisfactory » : EAM l'installe avec SteamCMD (app 1690800, version stable ou expérimentale).
+- Ports : port de jeu 7777 en UDP + TCP (jeu et API HTTPS du serveur) et port fiable 8888 en TCP, proposés automatiquement sans conflit avec les autres serveurs. Sur la box : rediriger les deux.
+- Au premier démarrage, EAM revendique le serveur avec un mot de passe admin qu'il crée (visible par le propriétaire dans la vue d'ensemble, pour le Server Manager du jeu), puis lui donne son nom et le mot de passe de connexion.
+- Arrêt propre : sauvegarde de la partie en cours (« <partie>_eam ») puis arrêt par l'API du serveur. Console par l'API (RunCommand), joueurs connectés, partie et palier dans la vue d'ensemble, journal du jeu.
+- Mise à jour automatique comme pour Vita Somnium Life.
+- Sauvegardes : le jeu les met toujours dans le profil Windows du compte qui le lance. EAM les garde dans le dossier du serveur (dossier saves) et place un lien à cet endroit au démarrage ; un dossier déjà présent avec des fichiers est renommé, jamais supprimé. Un seul serveur Satisfactory peut donc tourner à la fois sur une machine.
+
 ## 0.9.43 (2026-11-18) - Vita Somnium Life : l'arrêt marche aussi après une mise à jour d'EAM
 - Corrigé : après un redémarrage d'EAM (mise à jour automatique), EAM ne pouvait plus taper « stop » dans la console d'un serveur Vita Somnium Life déjà lancé ; l'arrêt attendait puis forçait. Le serveur est maintenant lancé par un petit relais (PowerShell de Windows) qui garde sa console ouverte même quand EAM redémarre.
 - Un serveur lancé avant cette version est arrêté tout de suite par force (au lieu d'attendre), puis relancé normalement.

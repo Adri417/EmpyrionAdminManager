@@ -171,6 +171,7 @@ UserEndpoints.Map(app);
 SystemEndpoints.Map(app);
 ServerEndpoints.Map(app);
 VslEndpoints.Map(app);
+SatisfactoryEndpoints.Map(app);
 ServerToolsEndpoints.Map(app);
 WorldEndpoints.Map(app);
 FeatureEndpoints.Map(app);

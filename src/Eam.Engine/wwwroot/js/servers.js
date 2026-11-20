@@ -10,6 +10,14 @@ import { featureTabs, isFeatureTab, renderFeature, featureEvent } from "./featur
 extend({
   fr: {
     srv_game: "Jeu", srv_query_port: "Port de requête Steam (query)", vsl_db: "Base de données MySQL du serveur", vsl_db_hint: "Créez d'abord une base vide (par exemple dans phpMyAdmin). EAM l'écrit dans databaseinfo.json ; le mot de passe n'est jamais réaffiché.", vsl_db_host: "Hôte", vsl_db_port: "Port", vsl_db_name: "Nom de la base", vsl_db_user: "Utilisateur", vsl_db_password: "Mot de passe", err_vsl_database_required: "Indiquez le nom de la base MySQL.", err_console_unavailable: "Console indisponible : le serveur a été démarré avant le dernier redémarrage d'EAM. Redémarrez-le depuis EAM.", vsl_console_hint: "Les commandes sont tapées dans la console du serveur Vita Somnium Life ; sa réponse apparaît dans le journal du jeu.", vsl_update_auto: "Mise à jour automatique : Steam est vérifié toutes les 10 minutes ; une nouvelle version arrête le serveur (« stop »), le met à jour et le redémarre.", srv_game_soon: "bientôt", srv_import_hint: "Le serveur existe déjà (avec EAH ou non) ? Importez-le avec toutes ses données.", srv_new_settings: "Ou installer un nouveau serveur", srv_new: "Ajouter un serveur", srv_name: "Nom du serveur", srv_name_hint: "Affiché dans EAM et dans la liste des serveurs du jeu. Sert aussi à nommer son dossier. Modifiable plus tard.",
+    sf_game_port: "Port de jeu (UDP + TCP)", sf_reliable_port: "Port fiable (TCP)", sf_admin_pw: "Mot de passe admin", sf_show: "Afficher",
+    sf_admin_hint: "Pour le Server Manager du jeu (Administrateur). Créé par EAM, qui revendique le serveur à son premier démarrage.",
+    sf_create_hint: "Satisfactory : à rediriger sur la box, le port de jeu en UDP et TCP et le port fiable en TCP. EAM revendique le serveur au premier démarrage (mot de passe admin visible dans la vue d'ensemble). Ses sauvegardes restent dans le dossier du serveur : un seul serveur Satisfactory peut tourner à la fois sur cette machine.",
+    sf_saves_hint: "Sauvegardes : dossier saves du serveur. Le jeu les cherche dans le profil Windows du compte qui le lance : EAM y place un lien vers ce dossier au démarrage.",
+    sf_console_hint: "Commandes de la console du serveur (envoyées par son API HTTPS).", sf_no_answer: "Le serveur ne répond pas encore sur son API.",
+    sf_session: "Partie", sf_tier: "Palier", sf_tick: "Ticks/s", sf_no_game: "aucune partie chargée : créez-la depuis le Server Manager du jeu",
+    err_satisfactory_one_running: "Un autre serveur Satisfactory tourne déjà sur cette machine (un seul à la fois).", err_satisfactory_admin_login: "Connexion admin au serveur refusée.",
+    err_satisfactory_api: "Le serveur a refusé la commande.", err_satisfactory_saves_link: "Impossible de lier le dossier des sauvegardes.",
     srv_game_port: "Port de jeu (+3 suivants)", srv_game_port_single: "Port de jeu (UDP)", srv_telnet_port: "Port telnet (interne)", srv_max_players: "Joueurs max",
     srv_password: "Mot de passe pour rejoindre (optionnel)", srv_description: "Description", srv_branch: "Version du jeu",
     branch_public: "Stable (public)", branch_experimental: "Expérimentale", srv_public: "Visible dans la liste publique des serveurs",
@@ -47,6 +55,14 @@ extend({
   },
   en: {
     srv_game: "Game", srv_query_port: "Steam query port", vsl_db: "Server MySQL database", vsl_db_hint: "Create an empty database first (for example in phpMyAdmin). EAM writes it into databaseinfo.json; the password is never shown again.", vsl_db_host: "Host", vsl_db_port: "Port", vsl_db_name: "Database name", vsl_db_user: "User", vsl_db_password: "Password", err_vsl_database_required: "Give the MySQL database name.", err_console_unavailable: "Console unavailable: the server was started before EAM's last restart. Restart it from EAM.", vsl_console_hint: "Commands are typed in the Vita Somnium Life server console; its answer shows in the game log.", vsl_update_auto: "Automatic update: Steam is checked every 10 minutes; a new version stops the server (\"stop\"), updates it and starts it again.", srv_game_soon: "coming soon", srv_import_hint: "The server already exists (with EAH or not)? Import it with all its data.", srv_new_settings: "Or install a new server", srv_new: "Add a server", srv_name: "Server name", srv_name_hint: "Shown in EAM and in the game's server list. Also names its folder. Can be changed later.",
+    sf_game_port: "Game port (UDP + TCP)", sf_reliable_port: "Reliable port (TCP)", sf_admin_pw: "Admin password", sf_show: "Show",
+    sf_admin_hint: "For the game's Server Manager (Administrator). Created by EAM, which claims the server at its first start.",
+    sf_create_hint: "Satisfactory: forward on your router the game port in UDP and TCP and the reliable port in TCP. EAM claims the server at its first start (admin password shown in the overview). Its saves stay in the server's folder: only one Satisfactory server can run at a time on this machine.",
+    sf_saves_hint: "Saves: the server's saves folder. The game looks for them in the Windows profile of the account running it: EAM puts a link to this folder there at start.",
+    sf_console_hint: "Server console commands (sent through its HTTPS API).", sf_no_answer: "The server does not answer on its API yet.",
+    sf_session: "Session", sf_tier: "Tier", sf_tick: "Ticks/s", sf_no_game: "no session loaded: create it from the game's Server Manager",
+    err_satisfactory_one_running: "Another Satisfactory server already runs on this machine (one at a time).", err_satisfactory_admin_login: "Admin login to the server refused.",
+    err_satisfactory_api: "The server refused the command.", err_satisfactory_saves_link: "Could not link the saves folder.",
     srv_game_port: "Game port (+3 next)", srv_game_port_single: "Game port (UDP)", srv_telnet_port: "Telnet port (internal)", srv_max_players: "Max players",
     srv_password: "Join password (optional)", srv_description: "Description", srv_branch: "Game version",
     branch_public: "Stable (public)", branch_experimental: "Experimental", srv_public: "Listed in the public server list",
@@ -156,7 +172,7 @@ export async function renderServerList(page) {
         : html`<div class="grid servers">${store.servers.map((s) => html`
           <a class="card server-card" href="#/server/${s.id}">
             <div class="server-head"><b>${s.name}</b>${stateBadge(s)}</div>${s.displayName ? html`<div class="hint">${s.displayName}</div>` : ""}
-            <div class="hint">${s.game === "vsl" ? html`Vita Somnium Life · ${t("ports")} ${s.gamePort}/${s.telnetPort}` : html`${t("ports")} ${s.gamePort}-${s.gamePort + 3} · ${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}`}${s.state === "Running" && playerCount(s.id) != null ? ` · ${playerCount(s.id)} ${t("col_players").toLowerCase()}` : ""}</div>
+            <div class="hint">${s.game !== "empyrion" ? html`${GAME_NAMES[s.game]} · ${t("ports")} ${s.gamePort}/${s.telnetPort}` : html`${t("ports")} ${s.gamePort}-${s.gamePort + 3} · ${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}`}${s.state === "Running" && playerCount(s.id) != null ? ` · ${playerCount(s.id)} ${t("col_players").toLowerCase()}` : ""}</div>
             ${progressBar(s)}
             ${s.lastError ? html`<div class="error">${errorText(s.lastError)}</div>` : ""}
           </a>`)}</div>`}`);
@@ -168,6 +184,10 @@ export async function renderServerList(page) {
   await loadServers();
 }
 
+const GAME_NAMES = { vsl: "Vita Somnium Life", satisfactory: "Satisfactory" };
+const firstPortLabel = (g) => (g === "vsl" ? "srv_game_port_single" : g === "satisfactory" ? "sf_game_port" : "srv_game_port");
+const secondPortLabel = (g) => (g === "vsl" ? "srv_query_port" : g === "satisfactory" ? "sf_reliable_port" : "srv_telnet_port");
+
 async function createDialog() {
   let ports = { gamePort: 30000, telnetPort: 30004 };
   try { ports = await api.get("/api/servers/suggest-ports"); } catch {}
@@ -176,7 +196,8 @@ async function createDialog() {
     <h3>${t("srv_new")}</h3>
     <label>${t("srv_game")}</label><select name="game">
       <option value="empyrion">Empyrion - Galactic Survival</option>
-      <option value="vsl">Vita Somnium Life</option></select>
+      <option value="vsl">Vita Somnium Life</option>
+      <option value="satisfactory">Satisfactory</option></select>
     <div class="card inset" data-only="empyrion"><div class="hint">${t("srv_import_hint")}</div>
       <button type="button" class="btn" id="cimp">⇪ ${t("imp_button")}</button></div>
     <h4 data-only="empyrion">${t("srv_new_settings")}</h4>
@@ -189,7 +210,7 @@ async function createDialog() {
     <div class="hint">${t("srv_ports_hint")}</div>
     <div class="form-row">
       <div><label>${t("srv_max_players")}</label><input name="maxPlayers" type="number" min="1" max="1000" value="8"></div>
-      <div data-only="empyrion"><label>${t("srv_branch")}</label><select name="branch"><option value="public">${t("branch_public")}</option><option value="experimental">${t("branch_experimental")}</option></select></div>
+      <div data-only="empyrion satisfactory"><label>${t("srv_branch")}</label><select name="branch"><option value="public">${t("branch_public")}</option><option value="experimental">${t("branch_experimental")}</option></select></div>
     </div>
     <label>${t("srv_password")}</label><input name="password" type="text" maxlength="64" autocomplete="off">
     <div data-only="vsl" hidden>
@@ -201,6 +222,7 @@ async function createDialog() {
       <label>${t("vsl_db_password")}</label><input name="dbPassword" type="password" maxlength="128" autocomplete="new-password">
       <div class="hint">${t("vsl_update_auto")}</div>
     </div>
+    <div data-only="satisfactory" hidden><div class="hint">${t("sf_create_hint")}</div><div class="hint">${t("vsl_update_auto")}</div></div>
     <div data-only="empyrion"><label>${t("srv_description")}</label><input name="description" type="text" maxlength="500">
     <label class="check"><input name="public" type="checkbox" checked> ${t("srv_public")}</label></div>
     <label class="check"><input name="autoStart" type="checkbox"> ${t("srv_autostart")}</label>
@@ -214,11 +236,19 @@ async function createDialog() {
   const empyrionPorts = { g: f.gamePort.value, t: f.telnetPort.value };
   f.game.addEventListener("change", () => {
     const g = f.game.value;
-    $$("[data-only]", dlg).forEach((e) => { e.hidden = e.dataset.only !== g; });
-    $("#tplabel", dlg).textContent = t(g === "vsl" ? "srv_query_port" : "srv_telnet_port");
-    $("#gplabel", dlg).textContent = t(g === "vsl" ? "srv_game_port_single" : "srv_game_port");
+    $$("[data-only]", dlg).forEach((e) => { e.hidden = !e.dataset.only.split(" ").includes(g); });
+    $("#tplabel", dlg).textContent = t(secondPortLabel(g));
+    $("#gplabel", dlg).textContent = t(firstPortLabel(g));
     // Usual ports of each game (still checked by EAM when the server is created).
     if (g === "vsl") { f.gamePort.value = 4172; f.telnetPort.value = 27016; f.maxPlayers.value = 256; }
+    else if (g === "satisfactory") {
+      // 7777 (game + API) and 8888 (reliable), moved up when another server already uses them.
+      const used = new Set(store.servers.flatMap((x) => [x.gamePort, x.telnetPort, ...(x.game === "empyrion" ? [x.gamePort + 1, x.gamePort + 2, x.gamePort + 3, x.modPort] : [])]));
+      let gp = 7777, rp = 8888;
+      while (used.has(gp)) gp++;
+      while (used.has(rp) || rp === gp) rp++;
+      f.gamePort.value = gp; f.telnetPort.value = rp; f.maxPlayers.value = 8;
+    }
     else { f.gamePort.value = empyrionPorts.g; f.telnetPort.value = empyrionPorts.t; f.maxPlayers.value = 8; }
   });
   f.addEventListener("submit", async (e) => {
@@ -276,6 +306,7 @@ export async function renderServerDetail(page, id, setTitle) {
     }
     mount(page, html`<div id="srv-notice"></div>
       <nav class="tabs">${(s.game === "vsl" ? ["overview", ...vslTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])]
+        : s.game === "satisfactory" ? ["overview", ...(admin ? ["console", "settings", "logs"] : [])]
         : ["overview", "chat", ...toolTabs(store.me.role), ...featureTabs(store.me.role), ...(admin ? ["console", "settings", "logs"] : [])]).map((k) =>
         html`<button type="button" data-tab="${k}" class="${k === tab ? "active" : ""}">${t("tab_" + k)}</button>`)}</nav>
       <div id="tab"></div>`);
@@ -326,7 +357,10 @@ export async function renderServerDetail(page, id, setTitle) {
       mount(el, html`<div id="live"></div><div class="card"><dl class="kv">
         <dt>${t("folder")}</dt><dd>${s.rootDir}</dd>
         ${s.game === "vsl" ? html`<dt>${t("srv_game")}</dt><dd>Vita Somnium Life</dd>
-        <dt>${t("ports")}</dt><dd>${s.gamePort} (UDP) · query ${s.telnetPort} (UDP)</dd>` : html`
+        <dt>${t("ports")}</dt><dd>${s.gamePort} (UDP) · query ${s.telnetPort} (UDP)</dd>` : s.game === "satisfactory" ? html`<dt>${t("srv_game")}</dt><dd>Satisfactory</dd>
+        <dt>${t("ports")}</dt><dd>${s.gamePort} (UDP + TCP) · ${s.telnetPort} (TCP)</dd>
+        <dt>${t("branch")}</dt><dd>${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}</dd>
+        ${owner ? html`<dt>${t("sf_admin_pw")}</dt><dd><button type="button" class="btn small" id="sf-admin">${t("sf_show")}</button> <span class="hint">${t("sf_admin_hint")}</span></dd>` : ""}` : html`
         <dt>${t("ports")}</dt><dd>${s.gamePort}-${s.gamePort + 3} (UDP/TCP) · telnet ${s.telnetPort} · mod EAM ${s.modPort}</dd>
         <dt>${t("branch")}</dt><dd>${t(s.branch === "experimental" ? "branch_experimental" : "branch_public")}</dd>`}
         <dt>${t("build")}</dt><dd>${s.buildId || "—"}${s.gameUpdateAvailable ? html` <span class="badge warn" title="${t("gu_hint")}">${t("gu_available", s.latestBuild)}</span>` : ""}</dd>
@@ -334,6 +368,14 @@ export async function renderServerDetail(page, id, setTitle) {
         ${s.startedUtc ? html`<dt>${t("since")}</dt><dd>${new Date(s.startedUtc).toLocaleString()}</dd>` : ""}
       </dl></div>`);
       if (s.game === "vsl") { mount($("#live", el), html`<div id="vsl-online"></div><div class="card"><div class="hint">${t("vsl_update_auto")}</div></div>`); if (s.state === "Running") renderOnline($("#vsl-online", el), s); }
+      else if (s.game === "satisfactory") {
+        mount($("#live", el), html`<div id="sf-state"></div><div class="card"><div class="hint">${t("vsl_update_auto")}</div><div class="hint">${t("sf_saves_hint")}</div></div>`);
+        if (s.state === "Running") sfState($("#sf-state", el), s);
+        $("#sf-admin", el)?.addEventListener("click", async (ev) => {
+          try { const r = await api.get(`/api/servers/${s.id}/satisfactory/admin`); const code = document.createElement("code"); code.textContent = r.password; ev.target.replaceWith(code); }
+          catch (ex) { toast(errorText(ex.code), true); }
+        });
+      }
       else renderLive($("#live", el), s);
       if (atLeast(store.me.role, "moderator")) drawWarnings(el, s);
     } else if (tab === "chat") {
@@ -356,7 +398,7 @@ export async function renderServerDetail(page, id, setTitle) {
       return;
     } else if (tab === "console") {
       if (el.dataset.tab === "console") return; // keep the console content between live updates
-      mount(el, html`<div class="card"><div class="hint">${t(s.game === "vsl" ? "vsl_console_hint" : "console_hint")}</div>
+      mount(el, html`<div class="card"><div class="hint">${t(s.game === "vsl" ? "vsl_console_hint" : s.game === "satisfactory" ? "sf_console_hint" : "console_hint")}</div>
         <pre class="console" id="out"></pre>
         <form class="console-form" id="cform"><input name="cmd" type="text" autocomplete="off" maxlength="500"><button class="btn primary">${t("send")}</button></form></div>`);
       $("#cform", el).addEventListener("submit", async (e) => {
@@ -374,8 +416,8 @@ export async function renderServerDetail(page, id, setTitle) {
       if (el.dataset.tab === "settings") return;
       mount(el, html`<form class="card" id="sf">
         <div class="form-row">
-          <div><label>${t(s.game === "vsl" ? "srv_game_port_single" : "srv_game_port")}</label><input name="gamePort" type="number" value="${s.gamePort}"></div>
-          <div><label>${t(s.game === "vsl" ? "srv_query_port" : "srv_telnet_port")}</label><input name="telnetPort" type="number" value="${s.telnetPort}"></div>
+          <div><label>${t(firstPortLabel(s.game))}</label><input name="gamePort" type="number" value="${s.gamePort}"></div>
+          <div><label>${t(secondPortLabel(s.game))}</label><input name="telnetPort" type="number" value="${s.telnetPort}"></div>
         </div>
         <div class="form-row">
           <div><label>${t("srv_max_players")}</label><input name="maxPlayers" type="number" min="1" max="1000" value="${s.maxPlayers ?? 8}"></div>
@@ -384,7 +426,7 @@ export async function renderServerDetail(page, id, setTitle) {
             <option value="experimental" ${raw(s.branch === "experimental" ? "selected" : "")}>${t("branch_experimental")}</option></select></div>
         </div>
         <label>${t("srv_password")}</label><input name="password" type="text" maxlength="64" placeholder="${s.hasPassword ? "••••••" : ""}">
-        <div ${raw(s.game === "vsl" ? "hidden" : "")}><label>${t("srv_description")}</label><input name="description" type="text" maxlength="500" value="${s.description ?? ""}">
+        <div ${raw(s.game !== "empyrion" ? "hidden" : "")}><label>${t("srv_description")}</label><input name="description" type="text" maxlength="500" value="${s.description ?? ""}">
         <label class="check"><input name="public" type="checkbox" ${raw(s.isPublic ? "checked" : "")}> ${t("srv_public")}</label></div>
         <label class="check"><input name="autoStart" type="checkbox" ${raw(s.autoStart ? "checked" : "")}> ${t("srv_autostart")}</label>
         <label class="check"><input name="autoRestart" type="checkbox" ${raw(s.autoRestart ? "checked" : "")}> ${t("srv_autorestart")}</label>
@@ -442,7 +484,7 @@ function stopDialog(s, mode) {
   const dlg = document.createElement("dialog");
   mount(dlg, html`<form method="dialog" id="sd">
     <h3>${t(mode === "restart" ? "restart_title" : "stop_title")}</h3>
-    <label>${t("delay_minutes")}</label><input name="delay" type="number" min="0" max="60" value="${s.state === "Running" && s.game !== "vsl" ? 5 : 0}">
+    <label>${t("delay_minutes")}</label><input name="delay" type="number" min="0" max="60" value="${s.state === "Running" && s.game === "empyrion" ? 5 : 0}">
     <label>${t("stop_message")}</label><input name="message" type="text" maxlength="120" value="${mode === "restart" ? "Redémarrage du serveur / Server restart" : "Arrêt du serveur / Server shutdown"}">
     <div class="hint">${t("stop_hint")}</div>
     <div class="dialog-actions"><button class="btn" value="cancel" formnovalidate>${t("cancel")}</button>
@@ -506,3 +548,15 @@ function deleteDialog(s) {
 
 export function dashboardServers() { return store.servers; }
 export function setServersListener(fn) { store.onChange = fn; }
+
+// Satisfactory: live state from the game's HTTPS API (players, session, tier).
+async function sfState(el, s) {
+  let r;
+  try { r = await api.get(`/api/servers/${s.id}/satisfactory/state`); } catch { return; }
+  if (!el.isConnected) return;
+  if (!r.answered) { mount(el, html`<div class="card"><div class="hint">${t("sf_no_answer")}</div></div>`); return; }
+  mount(el, html`<div class="card"><h3>${t("vo_title", r.players ?? 0, r.max ?? "?")}</h3><dl class="kv">
+    <dt>${t("sf_session")}</dt><dd>${r.session || "—"}${r.running === false ? ` (${t("sf_no_game")})` : ""}</dd>
+    <dt>${t("sf_tier")}</dt><dd>${r.techTier ?? "—"}</dd>
+    <dt>${t("sf_tick")}</dt><dd>${r.tickRate != null ? r.tickRate.toFixed(1) : "—"}</dd></dl></div>`);
+}

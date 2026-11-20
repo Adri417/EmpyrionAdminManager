@@ -8,6 +8,7 @@ public sealed record ServerDefinition
     public string Game { get; init; } = GameKinds.Empyrion;
     public bool IsEmpyrion => Game == GameKinds.Empyrion;
     public bool IsVsl => Game == GameKinds.Vsl;
+    public bool IsSatisfactory => Game == GameKinds.Satisfactory;
     /// <summary>Folder-safe name, derived from <see cref="Name"/>.</summary>
     public required string Slug { get; init; }
     /// <summary>Free name chosen by the admin, also shown in the game's server list.</summary>
@@ -58,8 +59,14 @@ public sealed record ServerDefinition
     /// <summary>Vita Somnium Life: the game's output (Unity -logFile).</summary>
     public string VslLogFile => Path.Combine(LogsDir, "game.log");
 
+    /// <summary>Satisfactory: EAM's own settings for it (max players, join password).</summary>
+    public string SatisfactorySettingsFile => Path.Combine(EamDir, "satisfactory.json");
+    /// <summary>Satisfactory: its saves and server settings (ServerSettings.PORT.sav), kept in the server's folder.</summary>
+    public string SatisfactorySavesDir => Path.Combine(RootDir, "saves");
+    public string SatisfactoryLogFile => Path.Combine(GameDir, "FactoryGame", "Saved", "Logs", "FactoryGame.log");
+
     /// <summary>Every port this server uses (game block + telnet + EAM mod).</summary>
-    public IEnumerable<int> AllPorts => IsVsl
-        ? [GamePort, TelnetPort] // game port + Steam query port
+    public IEnumerable<int> AllPorts => !IsEmpyrion
+        ? [GamePort, TelnetPort] // VSL: game port + Steam query port; Satisfactory: game port (UDP+TCP, API) + reliable port (TCP)
         : Enumerable.Range(GamePort, PortAllocator.GamePortCount).Append(TelnetPort).Append(ModPort);
 }

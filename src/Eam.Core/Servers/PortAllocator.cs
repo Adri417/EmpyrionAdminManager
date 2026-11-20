@@ -28,13 +28,22 @@ public static class PortAllocator
     }
 
     /// <summary>Returns an error code, or null when the ports can be used by the given server.</summary>
-    public static string? Check(int gamePort, int telnetPort, IEnumerable<ServerDefinition> others, Func<int, bool>? isPortBusy = null)
+    public static string? Check(int gamePort, int telnetPort, IEnumerable<ServerDefinition> others, Func<int, bool>? isPortBusy = null, string game = GameKinds.Empyrion)
     {
         isPortBusy ??= IsPortInUse;
         if (gamePort is < 1024 or > 65530 || telnetPort is < 1024 or > 65535) return "port_out_of_range";
-        var game = Enumerable.Range(gamePort, GamePortCount).Append(telnetPort).ToArray();
-        if (game.Distinct().Count() != game.Length) return "port_overlap";
-        var mine = game.Append(ModPortFor(gamePort, telnetPort)).ToArray();
+        int[] mine;
+        if (game == GameKinds.Empyrion)
+        {
+            var block = Enumerable.Range(gamePort, GamePortCount).Append(telnetPort).ToArray();
+            if (block.Distinct().Count() != block.Length) return "port_overlap";
+            mine = block.Append(ModPortFor(gamePort, telnetPort)).ToArray();
+        }
+        else
+        {
+            if (gamePort == telnetPort) return "port_overlap";
+            mine = [gamePort, telnetPort];
+        }
         var taken = others.SelectMany(s => s.AllPorts).ToHashSet();
         if (mine.Any(taken.Contains)) return "port_used_by_server";
         if (mine.Any(isPortBusy)) return "port_used_by_program";

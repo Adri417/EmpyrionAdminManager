@@ -44,7 +44,7 @@ public sealed class GameUpdateWatcher(ServerManager manager, LiveService live, B
             _handled[def.Id] = latest;
             var mode = FeatureStore.Load<GameplaySettings>(live.Data(def), "gameplay");
             // Vita Somnium Life has no gameplay page yet: always updated automatically (Adrien's choice).
-            if (def.IsVsl) { mode.GameUpdateMode = "auto"; mode.GameUpdateBackupFirst = false; }
+            if (!def.IsEmpyrion) { mode.GameUpdateMode = "auto"; mode.GameUpdateBackupFirst = false; }
             if (mode.GameUpdateMode == "off") continue;
             ServerManager.ServerLog(def, $"Game update available on Steam: build {installed} -> {latest} ({def.Branch})");
             if (mode.GameUpdateMode != "auto") continue;
