@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.45 (2026-11-23) - Correctif critique : le serveur Empyrion ne gèle plus à cause du mod EAM
+- Corrigé : le mod EAM envoyait ses messages à EAM directement depuis le fil principal du jeu. Quand EAM ne lisait plus assez vite, tout le serveur se figeait (1 à 7 min), les playfields étaient tués et les joueurs déconnectés. Même cause pour « le jeu n'a pas répondu à temps » en cliquant sur un joueur.
+- Le mod ne fait plus aucun accès réseau sur le fil du jeu : les messages vont dans une file limitée, envoyée par un fil séparé avec un délai maximum de 10 s. Si EAM ne lit plus, le lien est coupé (EAM se reconnecte), le jeu n'attend jamais.
+- EAM lit le lien sans arrêt, même pendant le traitement d'un message.
+
 ## 0.9.44 (2026-11-20) - Satisfactory
 - Nouveau jeu : **Satisfactory**. « Ajouter un serveur » > Jeu « Satisfactory » : EAM l'installe avec SteamCMD (app 1690800, version stable ou expérimentale).
 - Ports : port de jeu 7777 en UDP + TCP (jeu et API HTTPS du serveur) et port fiable 8888 en TCP, proposés automatiquement sans conflit avec les autres serveurs. Sur la box : rediriger les deux.

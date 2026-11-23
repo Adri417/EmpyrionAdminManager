@@ -497,10 +497,22 @@ public sealed class LiveService(ServerStore store, ServerManager manager, LiveHu
                 try
                 {
                     foreach (var op in new[] { "factions", "players", "playfields", "dedi" }) await link.SendAsync(new { op });
-                    while (true)
+                    // The socket is read without pause by its own task: handling a message (database writes...)
+                    // never delays reading, so the mod's messages never pile up in the game.
+                    var inbox = System.Threading.Channels.Channel.CreateBounded<JsonElement>(
+                        new System.Threading.Channels.BoundedChannelOptions(100_000) { SingleReader = true, SingleWriter = true });
+                    var reading = Task.Run(async () =>
                     {
-                        var msg = await link.ReceiveAsync(_stopping);
-                        if (msg is null) break;
+                        try
+                        {
+                            while (await link.ReceiveAsync(_stopping) is { } m) await inbox.Writer.WriteAsync(m, _stopping);
+                            inbox.Writer.TryComplete();
+                        }
+                        catch (Exception e) { inbox.Writer.TryComplete(e); }
+                    });
+                    await foreach (var item in inbox.Reader.ReadAllAsync(_stopping))
+                    {
+                        JsonElement? msg = item;
                         // One message that cannot be handled must never cut the link (every action through the
                         // mod would fail while it reconnects): it is logged and skipped.
                         try { await HandleAsync(def, l, link, msg.Value); }

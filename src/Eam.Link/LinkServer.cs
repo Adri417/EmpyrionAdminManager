@@ -26,8 +26,17 @@ namespace Eam.Link
         private volatile bool _stopping;
         private TcpClient _client;
         private StreamWriter _writer;
+        // Messages to the engine. The game thread only queues them: the socket is written by a background
+        // thread, so a slow or frozen EAM can never block the game (it used to freeze the whole server).
+        private readonly Queue<Dictionary<string, object>> _outbox = new Queue<Dictionary<string, object>>();
+        private readonly AutoResetEvent _outboxSignal = new AutoResetEvent(false);
+        private int _dropped;
 
         public const int MaxQueued = 2000;
+        /// <summary>Messages waiting for the engine. Beyond this, EAM is not reading: the link is reset (EAM reconnects and refreshes).</summary>
+        public const int MaxOutbox = 20000;
+        /// <summary>A write to the engine that takes longer than this closes the link instead of waiting.</summary>
+        public const int SendTimeoutMs = 10000;
 
         public LinkServer(int port, string key, Action<string> log)
         {
@@ -61,16 +70,54 @@ namespace Eam.Link
             }
         }
 
+        /// <summary>Queues a message for the engine. Never blocks and never touches the network (safe on the game thread).</summary>
         public void Send(Dictionary<string, object> message)
         {
-            string line;
-            try { line = MiniJson.Write(message); }
-            catch (Exception e) { _log("EAM link: cannot encode message: " + e.Message); return; }
+            if (message == null) return;
+            var overflow = false;
             lock (_gate)
             {
                 if (_writer == null) return;
-                try { _writer.Write(line); _writer.Write('\n'); _writer.Flush(); }
-                catch { CloseClientLocked(); }
+                if (_outbox.Count >= MaxOutbox) { _dropped++; overflow = true; CloseClientLocked(); }
+                else _outbox.Enqueue(message);
+            }
+            if (overflow) _log("EAM link: EAM is not reading, link reset (" + MaxOutbox + " messages waiting)");
+            else _outboxSignal.Set();
+        }
+
+        /// <summary>Background thread of one connection: encodes and writes the queued messages.</summary>
+        private void WriteLoop(TcpClient c, StreamWriter writer)
+        {
+            var batch = new List<Dictionary<string, object>>();
+            try
+            {
+                while (!_stopping)
+                {
+                    _outboxSignal.WaitOne(1000);
+                    lock (_gate)
+                    {
+                        if (!ReferenceEquals(_writer, writer)) return; // replaced or closed
+                        while (_outbox.Count > 0 && batch.Count < 500) batch.Add(_outbox.Dequeue());
+                    }
+                    if (batch.Count == 0) continue;
+                    foreach (var m in batch)
+                    {
+                        string line;
+                        try { line = MiniJson.Write(m); }
+                        catch (Exception e) { _log("EAM link: cannot encode message: " + e.Message); continue; }
+                        writer.Write(line);
+                        writer.Write('\n');
+                    }
+                    writer.Flush(); // bounded by the socket's send timeout
+                    batch.Clear();
+                    lock (_gate) { if (_outbox.Count > 0) _outboxSignal.Set(); }
+                }
+            }
+            catch (Exception e)
+            {
+                if (!_stopping) _log("EAM link: write to EAM failed (" + e.GetType().Name + "), link reset");
+                lock (_gate) { if (ReferenceEquals(_writer, writer)) CloseClientLocked(); }
+                try { c.Close(); } catch { }
             }
         }
 
@@ -111,6 +158,7 @@ namespace Eam.Link
                 writer.Write("OK\n");
                 writer.Flush();
                 c.ReceiveTimeout = 0;
+                c.SendTimeout = SendTimeoutMs;
 
                 lock (_gate)
                 {
@@ -118,6 +166,8 @@ namespace Eam.Link
                     _client = c;
                     _writer = writer;
                 }
+                var w = writer;
+                new Thread(() => WriteLoop(c, w)) { IsBackground = true, Name = "EAM link writer" }.Start();
                 _log("EAM link: engine connected");
                 ClientAuthenticated?.Invoke();
 
@@ -167,6 +217,8 @@ namespace Eam.Link
             try { _client?.Close(); } catch { }
             _client = null;
             _writer = null;
+            _outbox.Clear();
+            _outboxSignal.Set(); // lets the writer thread see it is closed
         }
 
         public void Dispose()
